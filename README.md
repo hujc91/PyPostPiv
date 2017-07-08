@@ -1,5 +1,5 @@
 
-<img src="https://github.com/hujc91/PyPostPiv/blob/master/logo2.png" width="400">
+<img src="https://github.com/hujc91/PyPostPiv/blob/master/logo2.png" width="500">
 
 Dependencies:
 - Numpy
