@@ -1,9 +1,7 @@
 # PyPostPIV
 An open source post particle image velocimetry (PIV) analysis library implemented with Python 3.
 
-![alt text][logo]
-
-[logo]: https://github.com/hujc91/PyPostPiv/blob/master/logo1.png
+<img src="https://github.com/favicon.ico" width="80">
 
 Dependencies:
 - Numpy
