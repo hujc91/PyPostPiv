@@ -4,8 +4,13 @@
 Dependencies:
 - Numpy
 - ReadIM
-  - Windows: pip install
-  - Linux: download source code from https://bitbucket.org/fleming79/readim and compile
+  - To get it working with the latest Python version
+  - Download source code from https://bitbucket.org/fleming79/readim 
+  - Compile with the following code in terminal
+    ```python
+    python setup.py build install
+    python setup.py test
+    ```
 
 # Contributors
 - JiaCheng "Winston" Hu, PhD Candidate, University of Waterloo, Email: jc3hu@uwaterloo.ca
