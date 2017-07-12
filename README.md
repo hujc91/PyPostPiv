@@ -3,6 +3,9 @@
 
 Dependencies:
 - Numpy
+- ReadIM
+  - Windows: pip install
+  - Linux: download source code from https://bitbucket.org/fleming79/readim and compile
 
 # Contributors
 - JiaCheng "Winston" Hu, PhD Candidate, University of Waterloo, Email: jc3hu@uwaterloo.ca
