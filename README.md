@@ -11,6 +11,7 @@ Dependencies:
     python setup.py build install
     python setup.py test
     ```
+  - Additionally for Windows, C++ build tools are also needed, and it can be found in http://landinghub.visualstudio.com/visual-cpp-build-tools
 
 # Contributors
 - JiaCheng "Winston" Hu, PhD Candidate, University of Waterloo, Email: jc3hu@uwaterloo.ca
