@@ -1,0 +1,1 @@
+Data set from Winston, single camera, vortex ring
