@@ -1,53 +1,82 @@
-""""Contains definitions of pypostpiv p3 class """
+"""Contains the definition of the pypostpiv p3 class """
+
 import h5py
-import numpy as np
+#import numpy as np
 from . import utilities
 from . import turbulence
 
-class Project2D2C():
-    '''
-    2 dimensional and 2 components PIV results project
-    - auther: Jia Cheng Hu
-    '''
+class Project2D2C:
+    """A class describing a 2 dimensional, 2 component vector field.
+
+    Author(s)
+    ---------
+    Jia Cheng Hu
+    """
 
     def __init__(self, hdf5_file_path):
-        empty_dict = dict()
         f_handle = h5py.File(hdf5_file_path)
-        self.data = utilities.load_from_hdf5(f_handle, empty_dict)
+
+        self.data = utilities.load_from_hdf5(f_handle)
         f_handle.close()
 
     def list_data(self):
-        '''
-        List all the data within the project
-        - auther: Jia Cheng Hu
-        '''
+        """Lists all the data within the project.
+
+        Author(s)
+        ---------
+        Jia Cheng Hu
+        """
         utilities.print_dict_struct(self.data)
 
     def get_grid_size(self, cam_num=0):
-        '''
-        - Return the grid size of the PIV vector fields of cam_num
-        - Return dx, dy
-        - auther: Jia Cheng Hu
-        '''
+        """Returns the grid size of the velocity field.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        (dx, dy) : `tuple`
+
+        Author(s)
+        ---------
+        Jia Cheng Hu
+        """
         sub_dict = self.data['cam_'+str(cam_num)]['grid_size']
         return sub_dict['dx'], sub_dict['dy']
 
     def get_velocity(self, cam_num=0):
-        '''
-        - Return the velocity field of the PIV vector fields of cam_num
-        - Return x, y, u, v
-        - auther: Jia Cheng Hu
-        '''
+        """Returns a velocity field.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        (x, y, u, v) : `tuple`
+
+        Author(s)
+        ---------
+        Jia Cheng Hu
+        """
         sub_dict = self.data['cam_'+str(cam_num)]['velocity']
         return sub_dict['x'], sub_dict['y'], sub_dict['u'], sub_dict['v']
 
     def get_vel_mag(self, cam_num=0):
-        '''
-        - Return the velocity magnitude field of the PIV vector fields
-        - Return x, y, U
-        - auther: Jia Cheng Hu
-        '''
-        # Check if the data is already computed, if not computed it
+        """Returns the  magnitude of a velocity field.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        (x, y, U) : `tuple`
+
+        Author(s)
+        ---------
+        Jia Cheng Hu
+        """
+        # Check if the data is already computed, if not compute it
         if 'vel_mag' not in self.data['cam_'+str(cam_num)].keys():
             for key, value in self.data.items():
                 vel = value['velocity']
@@ -58,12 +87,20 @@ class Project2D2C():
         return sub_dict['x'], sub_dict['y'], sub_dict['U']
 
     def get_vel_mean(self, cam_num=0):
-        '''
-        - Return PIV mean velocity field
-        - Return x, y, u, v
-        - auther: Jia Cheng Hu
-        '''
-        # Check if the data is already computed, if not computed it
+        """Returns the mean of a velocity field.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        (x, y, u, v) : `tuple`
+
+        Author(s)
+        ---------
+        Jia Cheng Hu
+        """
+        # Check if the data is already computed, if not compute it
         if 'vel_mean' not in self.data['cam_'+str(cam_num)].keys():
             for key, value in self.data.items():
                 vel = value['velocity']
@@ -74,12 +111,21 @@ class Project2D2C():
         return sub_dict['x'], sub_dict['y'], sub_dict['u'], sub_dict['v']
 
     def get_vel_mag_mean(self, cam_num=0):
-        '''
-        - Return PIV mean magnitude of the velocity field
-        - Return x, y, U
-        - auther: Jia Cheng Hu
-        '''
-        # Check if the data is already computed, if not computed it
+        """Returns the mean magnitude of a velocity field.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        (x, y, U) : `tuple`
+
+        Author(s)
+        ---------
+        Jia Cheng Hu
+        """
+
+        # Check if the data is already computed, if not compute it
         if 'vel_mag_mean' not in self.data['cam_'+str(cam_num)].keys():
             for key, value in self.data.items():
                 vel = value['velocity']
@@ -90,12 +136,20 @@ class Project2D2C():
         return sub_dict['x'], sub_dict['y'], sub_dict['U']
 
     def get_turb_rms(self, cam_num=0):
-        '''
-        - Return PIV mean velocity field
-        - Return x, y, u, v
-        - auther: Jia Cheng Hu
-        '''
-        # Check if the data is already computed, if not computed it
+        """Returns the RMS turbulence level.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        (x, y, u, v) : `tuple`
+
+        Author(s)
+        ---------
+        Jia Cheng Hu
+        """
+        # Check if the data is already computed. If not, compute it.
         if 'turb_rms' not in self.data['cam_'+str(cam_num)].keys():
             for key, value in self.data.items():
                 vel = value['velocity']
@@ -106,12 +160,19 @@ class Project2D2C():
         return sub_dict['x'], sub_dict['y'], sub_dict['u'], sub_dict['v']
 
     def get_turb_ke(self, cam_num=0):
-        '''
-        - Return PIV kinetic energy of the velocity field
-        - Return x, y, ke
-        - auther: Jia Cheng Hu
-        '''
-        # Check if the data is already computed, if not computed it
+        """Returns turbulent kinetic energy.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        (x, y, ke) : `tuple`
+        Author(s)
+        ---------
+        Jia Cheng Hu
+        """
+        # Check if the data is already computed, if not compute it
         if 'turb_ke' not in self.data['cam_'+str(cam_num)].keys():
             for key, value in self.data.items():
                 vel = value['velocity']
@@ -122,11 +183,19 @@ class Project2D2C():
         return sub_dict['x'], sub_dict['y'], sub_dict['ke']
 
     def get_turb_covar(self, cam_num=0):
-        '''
-        - Return PIV turb covarience of the velocity field
-        - Return x, y, uv
-        - auther: Jia Cheng Hu
-        '''
+        """Returns turbulence covariance.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        (x, y, uv) : `tuple`
+
+        Author(s)
+        ---------
+        Jia Cheng Hu
+        """
         # Check if the data is already computed, if not computed it
         if 'turb_covar' not in self.data['cam_'+str(cam_num)].keys():
             for key, value in self.data.items():
