@@ -1,4 +1,5 @@
-"""Contains the definition of the pypostpiv p3 class """
+"""This module defines the 2 dimensional 2 component PIV class.
+"""
 
 import h5py
 #import numpy as np

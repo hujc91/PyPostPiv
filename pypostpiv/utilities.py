@@ -5,14 +5,21 @@ import h5py
 import numpy as np
 
 def save_to_hdf5(h5_handle, py_dict):
+    """Saves all data from a dictionary to an HDF5 file.
+
+    This function will save the data in the same structure and layout as the
+    dictionary.
+
+    Parameters
+    ----------
+    h5_handle : `h5py._hl.files.File`
+        An HDF5 file handle that you want to load to as an input.
+
+    Author(s)
+    ---------
+    Jia Cheng Hu
     """
-    - Use recursion to save all data from python dictionary to HDF5.
-    - This function will save the data in the same structure layout as the
-      dictionary
-    - Requires HDF5 file handle that you want to save to and the dictionary that
-      you want to save as input
-    - Author(s): Jia Cheng Hu
-    """
+
     for key, value in py_dict.items():
         if not isinstance(value, dict):
             if isinstance(value, np.ndarray):
@@ -24,13 +31,24 @@ def save_to_hdf5(h5_handle, py_dict):
             save_to_hdf5(h5_handle[key], value)
 
 def load_from_hdf5(h5_handle):
+    """Loads all data from an HDF5 file to a dictionary.
+
+    This function will load the data in the same structure and layout as the
+    HDF5 groups.
+
+    Parameters
+    ----------
+    h5_handle : `h5py._hl.files.File`
+        An HDF5 file handle that you want to load to as an input.
+
+    Returns
+    -------
+
+    Author(s)
+    ---------
+    Jia Cheng Hu
     """
-    - Use recursion to load all data from HDF5 to python dictionary.
-    - This function will load the data in the same structure layout as the HDF5
-      groups.
-    - Requires HDF5 file handle that you want to load to as an input.
-    - author: Jia Cheng Hu
-    """
+
     def _load_from_hdf5(h5_handle, dict_h5):
         for key, value in h5_handle.items():
             if isinstance(value, h5py.Dataset):
@@ -43,9 +61,14 @@ def load_from_hdf5(h5_handle):
     return _load_from_hdf5(h5_handle, dict())
 
 def convert_2d_2c_vc7(vc7_folder_path, hdf5_file_path):
-    """
-    - Convert 2D 2 Components VC7 files into HDF5 format
-    - author: Jia Cheng Hu
+    """Converts a 2 dimensional 2 component VC7 file into the HDF5 format.
+
+    Parameters
+    ----------
+
+    Author(s)
+    ---------
+    Jia Cheng Hu
     """
     # Import all the nessessary libraries
     import ReadIM
@@ -113,10 +136,16 @@ def convert_2d_2c_vc7(vc7_folder_path, hdf5_file_path):
     f_handle.close()
 
 def print_dict_struct(py_dict, level=0):
+    """Prints the structure of the given dictionary.
+
+    Parameters
+    ----------
+
+    Author(s)
+    ---------
+    Jia Cheng Hu
     """
-    - Use recursion to print the structure of the given dictionary.
-    - Author(s): Jia Cheng Hu
-    """
+
     for key, value in py_dict.items():
         if isinstance(value, dict):
             print('----'*level + key)
