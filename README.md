@@ -18,3 +18,4 @@ Dependencies:
 - Jonathan "JD" Deng, MASc Candidate, University of Waterloo, Email: j8deng@uwaterloo.ca
 - Xueqing "Caddie" Zhang, PhD Candidate, University of Waterloo, Email:x634zhan@uwaterloo.ca
 - Amitvikram "Amit" Dutta, PhD Candidate, University of Waterloo, Email:a4dutta@uwaterloo.ca 
+- Yash Shah, PhD Candidate, University of Waterloo, Email: yash.hshah.mec11@iitbhu.ac.in
