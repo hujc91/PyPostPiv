@@ -27,7 +27,10 @@ class Field2D(np.ndarray):
         self.dL = getattr(obj, 'dL', None)
 
     def u(self, axis, time=None):
-        return self[axis, :, :, slice(0,time)]
+        if time == None:
+            return self[axis:axis+1]
+        else:
+            return self[axis:axis+1, :, :, time:time+1]
 
     def len(self, dimension):
         if dimension == 'x': return self.shape[1]

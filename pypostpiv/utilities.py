@@ -99,34 +99,22 @@ def convert_vc7(vc7_folder_path, dt):
 
         data_all_cam.append(piv.Field2D(dt, xx, yy, u, v))
 
-    # Load velocity vector fields
-    # for i, vc7_path in enumerate(all_vc7_path):
-    #     vbuff, vattr = ReadIM.get_Buffer_andAttributeList(vc7_path)
-    #     v_array = ReadIM.buffer_as_array(vbuff)[0]
-    #
-    #     for key, item in data.items():
-    #         n_cam = key.split('_')[1]
-    #
-    #         # PIV Mask
-    #         mask = np.ones((first_vbuff.ny, first_vbuff.nx))
-    #         mask[v_array[0+int(n_cam)*10] == 0] = np.nan
-    #
-    #         # Vector scaling
-    #         scaleI = float(ReadIM.att2dict(vattr)['FrameScaleI'+n_cam].splitlines()[0])
-    #
-    #         # Load velocity
-    #         item['velocity']['u'][:, :, i] = v_array[1+int(n_cam)*10]*scaleI*mask
-    #         item['velocity']['v'][:, :, i] = v_array[2+int(n_cam)*10]*scaleI*mask
-    #
-    # # Invert camera y axis to be align with mesh grid orientation
-    # for key, item in data.items():
-    #     item['velocity']['u'] = np.flipud(item['velocity']['u'])
-    #     item['velocity']['v'] = -np.flipud(item['velocity']['v'])
-    #
-    # # Save into HDF5
-    # f_handle = h5py.File(hdf5_file_path, 'w')
-    # save_to_hdf5(f_handle, data)
-    # f_handle.close()
+    #Load velocity vector fields
+    for i, vc7_path in enumerate(all_vc7_path):
+        vbuff, vattr = ReadIM.get_Buffer_andAttributeList(vc7_path)
+        v_array = ReadIM.buffer_as_array(vbuff)[0]
+
+        for n_cam, data in enumerate(data_all_cam):
+            # PIV Mask
+            mask = np.ones((first_vbuff.ny, first_vbuff.nx))
+            mask[v_array[n_cam*10] == 0] = np.nan
+
+            # Vector scaling
+            scaleI = float(ReadIM.att2dict(vattr)['FrameScaleI'+str(n_cam)].splitlines()[0])
+
+            # Load velocity
+            data[0,:,:,i] = v_array[1+n_cam*10]*scaleI*mask
+            data[1,:,:,i] = v_array[2+n_cam*10]*scaleI*mask
 
     return tuple(data_all_cam)
 
