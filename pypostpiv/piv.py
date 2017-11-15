@@ -1,208 +1,174 @@
-"""This module defines the 2 dimensional 2 component PIV class.
-"""
-
-import h5py
-#import numpy as np
-from . import utilities
+from . import piv
+from . import basics
+from . import vortex
 from . import turbulence
 
-class Project2D2C:
-    """A class describing a 2 dimensional, 2 component vector field.
+import h5py
+import warnings
+import numpy as np
+
+def load(file_path):
+    h5file = h5py.File(file_path, 'r')
+    field_class = Field2D(h5file['dt'][()], h5file['x'][:],
+                    h5file['y'][:], h5file['field'][0], h5file['field'][1])
+    h5file.close()
+    return field_class
+
+def convert_vc7(vc7_folder_path, dt):
+    """Converts a 2 dimensional 2 component VC7 file into the HDF5 format.
 
     Author(s)
     ---------
     Jia Cheng Hu
     """
+    # Import all the nessessary libraries
+    import ReadIM
+    import glob
 
-    def __init__(self, hdf5_file_path):
-        f_handle = h5py.File(hdf5_file_path)
+    # Get all file path
+    all_vc7_path = glob.glob(vc7_folder_path+'/*.vc7')
 
-        self.data = utilities.load_from_hdf5(f_handle)
-        f_handle.close()
+    # Get information of the first frames for Initialization
+    first_vbuff, first_vattr = ReadIM.get_Buffer_andAttributeList(all_vc7_path[0])
+    first_vattr_dict = ReadIM.att2dict(first_vattr)
 
-    def list_data(self):
-        """Lists all the data within the project.
+    # Initialize storage dictionary for each camera
+    data_all_cam = []
+    for n_cam in range(first_vbuff.nf):
 
-        Author(s)
-        ---------
-        Jia Cheng Hu
-        """
-        utilities.print_dict_struct(self.data)
+        u = np.zeros((first_vbuff.nx, first_vbuff.ny, len(all_vc7_path)))
+        v = np.zeros((first_vbuff.nx, first_vbuff.ny, len(all_vc7_path)))
 
-    def get_grid_size(self, cam_num=0):
-        """Returns the grid size of the velocity field.
+        dx =  float(first_vattr_dict['FrameScaleX'+str(n_cam)].splitlines()[0])*first_vbuff.vectorGrid/1000
+        dy = -float(first_vattr_dict['FrameScaleY'+str(n_cam)].splitlines()[0])*first_vbuff.vectorGrid/1000
 
-        Parameters
-        ----------
+        x0 = float(first_vattr_dict['FrameScaleX'+str(n_cam)].splitlines()[1])/1000
+        y0 = float(first_vattr_dict['FrameScaleY'+str(n_cam)].splitlines()[1])/1000
 
-        Returns
-        -------
-        (dx, dy) : `tuple`
+        x = x0 + np.arange(first_vbuff.nx)*dx + dx/2
+        y = y0 - np.arange(first_vbuff.ny)*dy - dy/2
 
-        Author(s)
-        ---------
-        Jia Cheng Hu
-        """
-        sub_dict = self.data['cam_'+str(cam_num)]['grid_size']
-        return sub_dict['dx'], sub_dict['dy']
+        xx, yy = np.meshgrid(x, y, indexing='ij')
 
-    def get_velocity(self, cam_num=0):
-        """Returns a velocity field.
+        data_all_cam.append(piv.Field2D(dt, xx, yy, u, v))
 
-        Parameters
-        ----------
+    #Load velocity vector fields
+    for i, vc7_path in enumerate(all_vc7_path):
+        vbuff, vattr = ReadIM.get_Buffer_andAttributeList(vc7_path)
+        v_array = ReadIM.buffer_as_array(vbuff)[0]
 
-        Returns
-        -------
-        (x, y, u, v) : `tuple`
+        for n_cam, data in enumerate(data_all_cam):
+            # PIV Mask
+            mask = np.ones((first_vbuff.ny, first_vbuff.nx))
+            mask[v_array[n_cam*10] == 0] = np.nan
 
-        Author(s)
-        ---------
-        Jia Cheng Hu
-        """
-        sub_dict = self.data['cam_'+str(cam_num)]['velocity']
-        return sub_dict['x'], sub_dict['y'], sub_dict['u'], sub_dict['v']
+            # Vector scaling
+            scaleI = float(ReadIM.att2dict(vattr)['FrameScaleI'+str(n_cam)].splitlines()[0])
 
-    def get_vel_mag(self, cam_num=0):
-        """Returns the  magnitude of a velocity field.
+            # Load velocity
+            data[0,:,:,i] =  (v_array[1+n_cam*10]*scaleI*mask).T
+            data[1,:,:,i] = -(v_array[2+n_cam*10]*scaleI*mask).T
 
-        Parameters
-        ----------
+    return tuple(data_all_cam)
 
-        Returns
-        -------
-        (x, y, U) : `tuple`
+def vector(*args):
+    """Combine scalar fields into a vector field
 
-        Author(s)
-        ---------
-        Jia Cheng Hu
-        """
-        # Check if the data is already computed, if not compute it
-        if 'vel_mag' not in self.data['cam_'+str(cam_num)].keys():
-            for key, value in self.data.items():
-                vel = value['velocity']
-                u_mag = turbulence.vel_mag(vel['u'], vel['v'])
-                value['vel_mag'] = {'x':vel['x'], 'y':vel['y'], 'U':u_mag}
+    Author(s)
+    ---------
+    Jia Cheng Hu
+    """
+    if len(args) == 2:
+        if args[0].ftype() is 'scalar' and args[1].ftype() is 'scalar':
+            new_field = Field2D(args[0].dt, args[0].x, args[0].y, np.array(args[0][0]), np.array(args[1][0]))
+            return new_field
+    assert()
 
-        sub_dict = self.data['cam_'+str(cam_num)]['vel_mag']
-        return sub_dict['x'], sub_dict['y'], sub_dict['U']
+class Field2D(np.ndarray):
+    # Class Initialization -----------------------------------------------------
+    def __new__(cls, *arg):
+        obj = np.array(arg[3:]).view(cls)
+        obj.dt = arg[0]
+        obj.x = arg[1]
+        obj.y = arg[2]
+        obj.dL = np.abs(obj.x[0,0] - obj.x[1,0])
 
-    def get_vel_mean(self, cam_num=0):
-        """Returns the mean of a velocity field.
+        if len(obj.shape) == 6:
+            obj = obj[:,:,:,np.newaxis]
+        return obj
 
-        Parameters
-        ----------
+    def __array_finalize__(self, obj):
+        if obj is None: return
+        self.x = getattr(obj, 'x', None)
+        self.y = getattr(obj, 'y', None)
+        self.dt = getattr(obj, 'dt', None)
+        self.dL = getattr(obj, 'dL', None)
 
-        Returns
-        -------
-        (x, y, u, v) : `tuple`
+    # Class Methods ------------------------------------------------------------
+    def u(self, axis, time=None):
+        if time == None:
+            return self[axis:axis+1]
+        else:
+            return self[axis:axis+1, :, :, time:time+1]
 
-        Author(s)
-        ---------
-        Jia Cheng Hu
-        """
-        # Check if the data is already computed, if not compute it
-        if 'vel_mean' not in self.data['cam_'+str(cam_num)].keys():
-            for key, value in self.data.items():
-                vel = value['velocity']
-                u, v = turbulence.vel_mean(vel['u'], vel['v'])
-                value['vel_mean'] = {'x':vel['x'], 'y':vel['y'], 'u':u, 'v':v}
+    def get_value(self, axis=None, time=None):
+        if axis == None and time == None:
+            return  self.x, self.y, np.array(self[0, :, :, 0])
+        return self.x, self.y, np.array(self[axis, :, :, time])
 
-        sub_dict = self.data['cam_'+str(cam_num)]['vel_mean']
-        return sub_dict['x'], sub_dict['y'], sub_dict['u'], sub_dict['v']
+    def len(self, dimension):
+        if dimension == 'x': return self.shape[1]
+        if dimension == 'y': return self.shape[2]
+        if dimension == 't': return self.shape[3]
 
-    def get_vel_mag_mean(self, cam_num=0):
-        """Returns the mean magnitude of a velocity field.
+    def ftype(self):
+        if self.shape[0] == 1:
+            return 'scalar'
+        elif self.shape[0] == 2:
+            return 'vector'
+        else:
+            assert()
 
-        Parameters
-        ----------
+    def save(self, file_path):
+        f = h5py.File(file_path, 'w')
+        f.create_dataset('field', data=self)
+        f.create_dataset('x', data=self.x)
+        f.create_dataset('y', data=self.y)
+        f.create_dataset('dt', data=self.dt)
+        f.close()
 
-        Returns
-        -------
-        (x, y, U) : `tuple`
+    def redim(self, s):
+        return self[:, s:-s, s:-s]
 
-        Author(s)
-        ---------
-        Jia Cheng Hu
-        """
+    # Field Basic Operations ---------------------------------------------------
+    def fsum(self,axis):
+        return basics.fsum(self,axis=axis)
 
-        # Check if the data is already computed, if not compute it
-        if 'vel_mag_mean' not in self.data['cam_'+str(cam_num)].keys():
-            for key, value in self.data.items():
-                vel = value['velocity']
-                U = turbulence.vel_mag_mean(vel['u'], vel['v'])
-                value['vel_mag_mean'] = {'x':vel['x'], 'y':vel['y'], 'U':U}
+    def mag(self):
+        return basics.mag(self)
 
-        sub_dict = self.data['cam_'+str(cam_num)]['vel_mag_mean']
-        return sub_dict['x'], sub_dict['y'], sub_dict['U']
+    def fmean(self):
+        return basics.fmean(self)
 
-    def get_turb_rms(self, cam_num=0):
-        """Returns the RMS turbulence level.
+    def rms(self):
+        return basics.rms(self)
 
-        Parameters
-        ----------
+    def ddx(self, method=None):
+        return basics.ddx(self, method)
 
-        Returns
-        -------
-        (x, y, u, v) : `tuple`
+    def ddy(self, method=None):
+        return basics.ddy(self, method)
 
-        Author(s)
-        ---------
-        Jia Cheng Hu
-        """
-        # Check if the data is already computed. If not, compute it.
-        if 'turb_rms' not in self.data['cam_'+str(cam_num)].keys():
-            for key, value in self.data.items():
-                vel = value['velocity']
-                u, v = turbulence.vel_rms(vel['u'], vel['v'])
-                value['vel_rms'] = {'x':vel['x'], 'y':vel['y'], 'u':u, 'v':v}
+    # Turbulence Operations ----------------------------------------------------
+    def turbulence_kinetic_energy(self):
+        return turbulence.kinetic_energy(self)
 
-        sub_dict = self.data['cam_'+str(cam_num)]['vel_rms']
-        return sub_dict['x'], sub_dict['y'], sub_dict['u'], sub_dict['v']
+    def turbulence_covariance(self):
+        return turbulence.covariance(self)
 
-    def get_turb_ke(self, cam_num=0):
-        """Returns turbulent kinetic energy.
+    # Vortex dynamics ----------------------------------------------------------
+    def vorticity(self, method=None):
+        return vortex.vorticity(self, method)
 
-        Parameters
-        ----------
-
-        Returns
-        -------
-        (x, y, ke) : `tuple`
-        Author(s)
-        ---------
-        Jia Cheng Hu
-        """
-        # Check if the data is already computed, if not compute it
-        if 'turb_ke' not in self.data['cam_'+str(cam_num)].keys():
-            for key, value in self.data.items():
-                vel = value['velocity']
-                ke = turbulence.kinetic_energy(vel['u'], vel['v'])
-                value['turb_ke'] = {'x':vel['x'], 'y':vel['y'], 'ke':ke}
-
-        sub_dict = self.data['cam_'+str(cam_num)]['turb_ke']
-        return sub_dict['x'], sub_dict['y'], sub_dict['ke']
-
-    def get_turb_covar(self, cam_num=0):
-        """Returns turbulence covariance.
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        (x, y, uv) : `tuple`
-
-        Author(s)
-        ---------
-        Jia Cheng Hu
-        """
-        # Check if the data is already computed, if not computed it
-        if 'turb_covar' not in self.data['cam_'+str(cam_num)].keys():
-            for key, value in self.data.items():
-                vel = value['velocity']
-                uv = turbulence.vel_covar(vel['u'], vel['v'])
-                value['turb_covar'] = {'x':vel['x'], 'y':vel['y'], 'uv':uv}
-
-        sub_dict = self.data['cam_'+str(cam_num)]['turb_covar']
-        return sub_dict['x'], sub_dict['y'], sub_dict['uv']
+    def lambda2(self, method=None):
+        return vortex.lambda2(self, method)
