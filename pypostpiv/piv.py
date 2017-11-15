@@ -1,5 +1,6 @@
 from . import piv
 from . import basics
+from . import vortex
 from . import turbulence
 
 import h5py
@@ -8,8 +9,8 @@ import numpy as np
 
 def load(file_path):
     h5file = h5py.File(file_path, 'r')
-    grp = h5file['field']
-    field_class = Field2D(grp.attrs['dt'], grp.attrs['x'], grp.attrs['y'], grp[0], grp[1])
+    field_class = Field2D(h5file['dt'][()], h5file['x'][:],
+                    h5file['y'][:], h5file['field'][0], h5file['field'][1])
     h5file.close()
     return field_class
 
@@ -25,7 +26,7 @@ def convert_vc7(vc7_folder_path, dt):
     import glob
 
     # Get all file path
-    all_vc7_path = glob.glob(vc7_folder_path+'*.vc7')
+    all_vc7_path = glob.glob(vc7_folder_path+'/*.vc7')
 
     # Get information of the first frames for Initialization
     first_vbuff, first_vattr = ReadIM.get_Buffer_andAttributeList(all_vc7_path[0])
@@ -35,8 +36,8 @@ def convert_vc7(vc7_folder_path, dt):
     data_all_cam = []
     for n_cam in range(first_vbuff.nf):
 
-        u = np.zeros((first_vbuff.ny, first_vbuff.nx, len(all_vc7_path)))
-        v = np.zeros((first_vbuff.ny, first_vbuff.nx, len(all_vc7_path)))
+        u = np.zeros((first_vbuff.nx, first_vbuff.ny, len(all_vc7_path)))
+        v = np.zeros((first_vbuff.nx, first_vbuff.ny, len(all_vc7_path)))
 
         dx =  float(first_vattr_dict['FrameScaleX'+str(n_cam)].splitlines()[0])*first_vbuff.vectorGrid/1000
         dy = -float(first_vattr_dict['FrameScaleY'+str(n_cam)].splitlines()[0])*first_vbuff.vectorGrid/1000
@@ -65,16 +66,12 @@ def convert_vc7(vc7_folder_path, dt):
             scaleI = float(ReadIM.att2dict(vattr)['FrameScaleI'+str(n_cam)].splitlines()[0])
 
             # Load velocity
-            data[0,:,:,i] = v_array[1+n_cam*10]*scaleI*mask
-            data[1,:,:,i] = v_array[2+n_cam*10]*scaleI*mask
-
-            data[0,:,:,i] =  data[0,:,:,i].T
-            data[1,:,:,i] = -data[1,:,:,i].T
+            data[0,:,:,i] =  (v_array[1+n_cam*10]*scaleI*mask).T
+            data[1,:,:,i] = -(v_array[2+n_cam*10]*scaleI*mask).T
 
     return tuple(data_all_cam)
 
 class Field2D(np.ndarray):
-
     # Class Initialization -----------------------------------------------------
     def __new__(cls, *arg):
         obj = np.array(arg[3:]).view(cls)
@@ -101,7 +98,9 @@ class Field2D(np.ndarray):
         else:
             return self[axis:axis+1, :, :, time:time+1]
 
-    def get_value(self, axis, time):
+    def get_value(self, axis=None, time=None):
+        if axis == None and time == None:
+            return  self.x, self.y, np.array(self[0, :, :, 0])
         return self.x, self.y, np.array(self[axis, :, :, time])
 
     def len(self, dimension):
@@ -116,15 +115,15 @@ class Field2D(np.ndarray):
     def save(self, file_path):
         f = h5py.File(file_path, 'w')
         f.create_dataset('field', data=self)
-        f['field'].attrs['x'] = self.x
-        f['field'].attrs['y'] = self.y
-        f['field'].attrs['dt'] = self.dt
+        f.create_dataset('x', data=self.x)
+        f.create_dataset('y', data=self.y)
+        f.create_dataset('dt', data=self.dt)
         f.close()
 
     def redim(self, s):
         return self[:, s:-s, s:-s]
 
-    # Field Basic Operation ----------------------------------------------------
+    # Field Basic Operations ---------------------------------------------------
     def mag(self):
         return basics.mag(self)
 
@@ -139,3 +138,10 @@ class Field2D(np.ndarray):
 
     def ddy(self, method=None):
         return basics.ddy(self, method)
+
+    # Turbulence Operations ----------------------------------------------------
+    def turbulence_kinetic_energy(self):
+        return turbulence.kinetic_energy(self)
+
+    def turbulence_covariance(self):
+        return turbulence.covariance(self)
