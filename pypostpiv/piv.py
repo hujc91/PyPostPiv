@@ -71,6 +71,19 @@ def convert_vc7(vc7_folder_path, dt):
 
     return tuple(data_all_cam)
 
+def vector(*args):
+    """Combine scalar fields into a vector field
+
+    Author(s)
+    ---------
+    Jia Cheng Hu
+    """
+    if len(args) == 2:
+        if args[0].ftype() is 'scalar' and args[1].ftype() is 'scalar':
+            new_field = Field2D(args[0].dt, args[0].x, args[0].y, np.array(args[0][0]), np.array(args[1][0]))
+            return new_field
+    assert()
+
 class Field2D(np.ndarray):
     # Class Initialization -----------------------------------------------------
     def __new__(cls, *arg):
@@ -109,8 +122,12 @@ class Field2D(np.ndarray):
         if dimension == 't': return self.shape[3]
 
     def ftype(self):
-        field = ('Scalar', '2D Vector', '3D Vector')
-        return field[self.shape[0]-1]
+        if self.shape[0] == 1:
+            return 'scalar'
+        elif self.shape[0] == 2:
+            return 'vector'
+        else:
+            assert()
 
     def save(self, file_path):
         f = h5py.File(file_path, 'w')
@@ -124,11 +141,14 @@ class Field2D(np.ndarray):
         return self[:, s:-s, s:-s]
 
     # Field Basic Operations ---------------------------------------------------
+    def fsum(self,axis):
+        return basics.fsum(self,axis=axis)
+
     def mag(self):
         return basics.mag(self)
 
-    def mean(self):
-        return basics.mean(self)
+    def fmean(self):
+        return basics.fmean(self)
 
     def rms(self):
         return basics.rms(self)
@@ -145,3 +165,10 @@ class Field2D(np.ndarray):
 
     def turbulence_covariance(self):
         return turbulence.covariance(self)
+
+    # Vortex dynamics ----------------------------------------------------------
+    def vorticity(self, method=None):
+        return vortex.vorticity(self, method)
+
+    def lambda2(self, method=None):
+        return vortex.lambda2(self, method)

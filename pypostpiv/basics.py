@@ -3,6 +3,9 @@
 import warnings
 import numpy as np
 
+def fsum(field, axis):
+    return np.nansum(field, axis=0, keepdims=True)
+
 def mag(field):
     """Compute the magnitude of the field
 
@@ -12,7 +15,7 @@ def mag(field):
     """
     return np.sqrt(np.sum(field**2, axis=0, keepdims=True))
 
-def mean(field):
+def fmean(field):
     """Compute the mean of the field
 
     Author(s)
@@ -51,7 +54,7 @@ def ddx(field, method):
         return new_field
 
     elif method == 'richardson':
-        new_field = field[:,:-4,2:-2] - 8*field[:,1:-3,2:-2]  + 8*field[:,3:-1,2:-2]  +  field[:,4:,2:-2]
+        new_field = field[:,:-4,2:-2] - 8*field[:,1:-3,2:-2]  + 8*field[:,3:-1,2:-2]  -  field[:,4:,2:-2]
         new_field = new_field/field.dL/12
         new_field.x = field.x[2:-2,2:-2]
         new_field.y = field.y[2:-2,2:-2]
@@ -87,7 +90,7 @@ def ddy(field, method):
         return new_field
 
     elif method == 'richardson':
-        new_field = field[:,2:-2,4:] - 8*field[:,2:-2,3:-1] + 8*field[:,2:-2,1:-3] + field[:,2:-2,:-4]
+        new_field = field[:,2:-2,4:] - 8*field[:,2:-2,3:-1] + 8*field[:,2:-2,1:-3] - field[:,2:-2,:-4]
         new_field = new_field/field.dL/12
         new_field.x = field.x[2:-2,2:-2]
         new_field.y = field.y[2:-2,2:-2]

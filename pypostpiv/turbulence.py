@@ -8,7 +8,7 @@ def kinetic_energy(field):
     ---------
     Jia Cheng Hu
     """
-    return 0.5*(field.rms()**2).sum(0)
+    return 0.5*(field.rms()**2).fsum(0)
 
 def covariance(field):
     """Calculates the covariance of turbulent fluctuations.
@@ -17,5 +17,5 @@ def covariance(field):
     ---------
     Jia Cheng Hu
     """
-    field_fluc = field - field.mean()
-    return (field_fluc.u(0)*field_fluc.u(1)).mean()
+    field_fluc = field - field.fmean()
+    return (field_fluc.u(0)*field_fluc.u(1)).fmean()

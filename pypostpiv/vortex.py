@@ -8,7 +8,7 @@ def vorticity(field, method=None):
     ---------
     Jia Cheng Hu
     """
-    if field.ftype() == '2D Vector':
+    if field.ftype() == 'vector':
         if method == 'circulation':
             u = field.u(0)
             v = field.u(1)
