@@ -180,11 +180,11 @@ class Field2D(np.ndarray):
         return basics.ddy(self, method)
 
     # Turbulence Operations ----------------------------------------------------
-    def turbulence_kinetic_energy(self):
-        return turbulence.kinetic_energy(self)
+    def turbulent_kinetic_energy(self):
+        return turbulence.turbulent_kinetic_energy(self)
 
-    def turbulence_covariance(self):
-        return turbulence.covariance(self)
+    def reynolds_shear_stress(self):
+        return turbulence.reynolds_shear_stress(self)
 
     # Vortex dynamics ----------------------------------------------------------
     def vorticity(self, method=None):
