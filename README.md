@@ -5,8 +5,8 @@ Dependencies:
 - Numpy
 - ReadIM
   - To get it working with the latest Python version
-  - Download source code from https://bitbucket.org/fleming79/readim 
-  - Compile with the following code in terminal
+  - Download the source code from https://bitbucket.org/fleming79/readim 
+  - Compile it with the following code in the terminal
     ```python
     python setup.py build install
     python setup.py test

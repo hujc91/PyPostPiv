@@ -8,14 +8,17 @@ import warnings
 import numpy as np
 
 def load(file_path):
+    """Loads a Field2D class stored in an HDF5 file.
+    """
     h5file = h5py.File(file_path, 'r')
-    field_class = Field2D(h5file['dt'][()], h5file['x'][:],
-                    h5file['y'][:], h5file['field'][0], h5file['field'][1])
+    field_class = Field2D(
+        h5file['dt'][()], h5file['x'][:],
+        h5file['y'][:], h5file['field'][0], h5file['field'][1])
     h5file.close()
     return field_class
 
 def convert_vc7(vc7_folder_path, dt):
-    """Converts a 2 dimensional 2 component VC7 file into the HDF5 format.
+    """Converts a 2 dimensional, 2 component VC7 file into the HDF5 format.
 
     Author(s)
     ---------
@@ -72,7 +75,7 @@ def convert_vc7(vc7_folder_path, dt):
     return tuple(data_all_cam)
 
 def vector(*args):
-    """Combine scalar fields into a vector field
+    """Combines a set of scalar fields into a vector field.
 
     Author(s)
     ---------
@@ -80,12 +83,20 @@ def vector(*args):
     """
     if len(args) == 2:
         if args[0].ftype() is 'scalar' and args[1].ftype() is 'scalar':
-            new_field = Field2D(args[0].dt, args[0].x, args[0].y, np.array(args[0][0]), np.array(args[1][0]))
+            new_field = Field2D(
+                args[0].dt, args[0].x, args[0].y,
+                np.array(args[0][0]), np.array(args[1][0]))
             return new_field
-    assert()
 
 class Field2D(np.ndarray):
-    # Class Initialization -----------------------------------------------------
+    """This class represents a 2D vector field in time and space.
+
+    All the processing functions (operating only on on field argument) have
+    been added as methods to the class. For example:
+    pypostpiv.basics.ddx(field_instance) can also be accessed as
+    field_instance.ddx() for convenience.
+    """
+
     def __new__(cls, *arg):
         obj = np.array(arg[3:]).view(cls)
         obj.dt = arg[0]
@@ -98,28 +109,37 @@ class Field2D(np.ndarray):
         return obj
 
     def __array_finalize__(self, obj):
-        if obj is None: return
+        if obj is None:
+            return None
         self.x = getattr(obj, 'x', None)
         self.y = getattr(obj, 'y', None)
         self.dt = getattr(obj, 'dt', None)
         self.dL = getattr(obj, 'dL', None)
 
-    # Class Methods ------------------------------------------------------------
     def u(self, axis, time=None):
-        if time == None:
+        """Gets a component of the velocity field, 0 for u, 1 for v.
+
+        This returns the field with the specific component of the velocity
+        at all times. If the time argument is specified, only that time
+        is returned.
+        """
+        if time is None:
             return self[axis:axis+1]
         else:
             return self[axis:axis+1, :, :, time:time+1]
 
     def get_value(self, axis=None, time=None):
-        if axis == None and time == None:
+        if axis is None and time is None:
             return  self.x, self.y, np.array(self[0, :, :, 0])
         return self.x, self.y, np.array(self[axis, :, :, time])
 
     def len(self, dimension):
-        if dimension == 'x': return self.shape[1]
-        if dimension == 'y': return self.shape[2]
-        if dimension == 't': return self.shape[3]
+        if dimension == 'x':
+            return self.shape[1]
+        elif dimension == 'y':
+            return self.shape[2]
+        elif dimension == 't':
+            return self.shape[3]
 
     def ftype(self):
         if self.shape[0] == 1:
