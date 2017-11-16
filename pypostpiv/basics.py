@@ -34,7 +34,7 @@ def rms(field):
     """
     return np.nanstd(field, axis=3, keepdims=True)
 
-def ddx(field, method):
+def ddx(field, method=None):
     """Compute the derivative of field with respect to x-axis
 
     Method
@@ -70,7 +70,7 @@ def ddx(field, method):
     else:
         assert()
 
-def ddy(field, method):
+def ddy(field, method=None):
     """Compute the derivative of field with respect to y-axis
 
     Method
