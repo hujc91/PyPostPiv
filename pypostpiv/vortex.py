@@ -4,6 +4,18 @@
 def vorticity(field, method=None):
     """Compute the vorticity of the field
 
+    Parameters
+    ----------
+    field : Field2D
+    method: str, optional
+        A method for calculation of voritcity. Valid options are:
+        'circulation' - 
+        ...
+
+    Returns
+    -------
+    Field2D
+
     Author(s)
     ---------
     Jia Cheng Hu
@@ -29,7 +41,19 @@ def vorticity(field, method=None):
         assert()
 
 def lambda2(field, method=None):
-    """Compute the lambda2 of the field
+    """
+    Computes the lambda2 criterion of the field.
+
+    Parameters
+    ----------
+    field : Field2D
+    method: str, optional
+        A method for calculation of the lambda2 criterion. Valid options are:
+        ...
+
+    Returns
+    -------
+    Field2D
 
     Author(s)
     ---------

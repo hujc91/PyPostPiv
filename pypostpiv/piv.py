@@ -8,7 +8,16 @@ import warnings
 import numpy as np
 
 def load(file_path):
-    """Loads a Field2D class stored in an HDF5 file.
+    """
+    Loads a Field2D class stored in an HDF5 file.
+
+    Parameters
+    ----------
+    file_path : string
+
+    Returns
+    -------
+    Field2D
     """
     h5file = h5py.File(file_path, 'r')
     field_class = Field2D(
@@ -19,6 +28,14 @@ def load(file_path):
 
 def convert_vc7(vc7_folder_path, dt):
     """Converts a 2 dimensional, 2 component VC7 file into the HDF5 format.
+
+    Parameters
+    ----------
+    vc7_folder_path : string
+
+    Returns
+    -------
+    tuple
 
     Author(s)
     ---------
@@ -75,7 +92,17 @@ def convert_vc7(vc7_folder_path, dt):
     return tuple(data_all_cam)
 
 def vector(*args):
-    """Combines a set of scalar fields into a vector field.
+    """
+    Combines a set of scalar fields into a vector field.
+
+    Parameters
+    ----------
+    *args : array_like
+        a set of scalar fields
+
+    Returns
+    -------
+    Field2D
 
     Author(s)
     ---------
@@ -89,7 +116,8 @@ def vector(*args):
             return new_field
 
 class Field2D(np.ndarray):
-    """This class represents a 2D vector field in time and space.
+    """
+    This class represents a 2D vector field in time and space.
 
     All the processing functions (operating only on on field argument) have
     been added as methods to the class. For example:
@@ -117,7 +145,8 @@ class Field2D(np.ndarray):
         self.dL = getattr(obj, 'dL', None)
 
     def u(self, axis, time=None):
-        """Gets a component of the velocity field, 0 for u, 1 for v.
+        """
+        Gets a component of the velocity field, 0 for u, 1 for v.
 
         This returns the field with the specific component of the velocity
         at all times. If the time argument is specified, only that time
@@ -129,11 +158,31 @@ class Field2D(np.ndarray):
             return self[axis:axis+1, :, :, time:time+1]
 
     def get_value(self, axis=None, time=None):
+        """
+        Description.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        """
         if axis is None and time is None:
             return  self.x, self.y, np.array(self[0, :, :, 0])
         return self.x, self.y, np.array(self[axis, :, :, time])
 
     def len(self, dimension):
+        """
+        Description.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        """
         if dimension == 'x':
             return self.shape[1]
         elif dimension == 'y':
@@ -142,6 +191,16 @@ class Field2D(np.ndarray):
             return self.shape[3]
 
     def ftype(self):
+        """
+        Description.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        """
         if self.shape[0] == 1:
             return 'scalar'
         elif self.shape[0] == 2:
@@ -150,6 +209,16 @@ class Field2D(np.ndarray):
             assert()
 
     def save(self, file_path):
+        """
+        Description.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        """
         f = h5py.File(file_path, 'w')
         f.create_dataset('field', data=self)
         f.create_dataset('x', data=self.x)
@@ -158,6 +227,16 @@ class Field2D(np.ndarray):
         f.close()
 
     def redim(self, s):
+        """
+        Description.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        """
         return self[:, s:-s, s:-s]
 
     # Field Basic Operations ---------------------------------------------------

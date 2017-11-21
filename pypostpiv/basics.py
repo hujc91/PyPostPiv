@@ -1,5 +1,7 @@
-"""A set of functions for basic field operations
 """
+A set of functions for basic field operations
+"""
+
 import warnings
 import numpy as np
 
@@ -7,7 +9,12 @@ def fsum(field, axis):
     return np.nansum(field, axis=0, keepdims=True)
 
 def mag(field):
-    """Compute the magnitude of the field
+    """
+    Compute the magnitude of the field.
+
+    Parameters
+    ----------
+    field : Field2d 
 
     Author(s)
     ---------
@@ -16,7 +23,12 @@ def mag(field):
     return np.sqrt(np.sum(field**2, axis=0, keepdims=True))
 
 def fmean(field):
-    """Compute the mean of the field
+    """
+    Compute the time mean of the field.
+
+    Parameters
+    ----------
+    field : Field2d 
 
     Author(s)
     ---------
@@ -26,7 +38,12 @@ def fmean(field):
     return np.nanmean(field, axis=3, keepdims=True)
 
 def rms(field):
-    """Compute the root mean square of the field
+    """
+    Compute the root mean square of the field.
+
+    Parameters
+    ----------
+    field : Field2d 
 
     Author(s)
     ---------
@@ -35,13 +52,20 @@ def rms(field):
     return np.nanstd(field, axis=3, keepdims=True)
 
 def ddx(field, method=None):
-    """Compute the derivative of field with respect to x-axis
+    """
+    Compute the derivative of field with respect to x-axis.
 
-    Method
-    ---------
-    'central'      - central difference scheme, second order accuracy (default)
-    'richardson'   - Richardson extrapolation scheme, third order accuracy
-    'least square' - least square scheme, second order accuracy
+    Parameters
+    ----------
+    field : Field2d 
+    method : string, optional 
+        'central' - central difference scheme, second order accuracy (default)
+        'richardson' - Richardson extrapolation scheme, third order accuracy
+        'least square' - least square scheme, second order accuracy
+
+    Returns
+    -------
+    Field2d
 
     Author(s)
     ---------
@@ -71,13 +95,20 @@ def ddx(field, method=None):
         assert()
 
 def ddy(field, method=None):
-    """Compute the derivative of field with respect to y-axis
+    """
+    Compute the derivative of field with respect to y-axis.
 
-    Method
-    ---------
-    'central'      - central difference scheme, second order accuracy (default)
-    'richardson'   - Richardson extrapolation scheme, third order accuracy
-    'least square' - least square scheme, second order accuracy
+    Parameters
+    ----------
+    field : Field2d 
+    method : string, optional 
+        'central' - central difference scheme, second order accuracy (default)
+        'richardson' - Richardson extrapolation scheme, third order accuracy
+        'least square' - least square scheme, second order accuracy
+
+    Returns
+    -------
+    Field2d
 
     Author(s)
     ---------
