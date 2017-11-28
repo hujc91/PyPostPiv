@@ -6,6 +6,7 @@ from . import turbulence
 import h5py
 import warnings
 import numpy as np
+import os
 
 def load(file_path):
     """
@@ -32,6 +33,7 @@ def convert_vc7(vc7_folder_path, dt):
     Parameters
     ----------
     vc7_folder_path : string
+        Path to a folder containing a collection of vc7 files.
 
     Returns
     -------
@@ -46,7 +48,7 @@ def convert_vc7(vc7_folder_path, dt):
     import glob
 
     # Get all file path
-    all_vc7_path = glob.glob(vc7_folder_path+'/*.vc7')
+    all_vc7_path = glob.glob(os.path.join(vc7_folder_path, '/*.vc7'))
 
     # Get information of the first frames for Initialization
     first_vbuff, first_vattr = ReadIM.get_Buffer_andAttributeList(all_vc7_path[0])
@@ -114,6 +116,11 @@ def vector(*args):
                 args[0].dt, args[0].x, args[0].y,
                 np.array(args[0][0]), np.array(args[1][0]))
             return new_field
+        else:
+            raise ValueError('Input fields must be scalar')
+    else:
+        raise NotImplementedError(
+            'Only 2 velocity component vector fields are currently supported')
 
 class Field2D(np.ndarray):
     """
@@ -125,11 +132,11 @@ class Field2D(np.ndarray):
     field_instance.ddx() for convenience.
     """
 
-    def __new__(cls, *arg):
-        obj = np.array(arg[3:]).view(cls)
-        obj.dt = arg[0]
-        obj.x = arg[1]
-        obj.y = arg[2]
+    def __new__(cls, dt, x, y, field, *arg):
+        obj = np.array(field).view(cls)
+        obj.dt = dt
+        obj.x = x
+        obj.y = y
         obj.dL = np.abs(obj.x[0,0] - obj.x[1,0])
 
         if len(obj.shape) == 6:
@@ -138,7 +145,7 @@ class Field2D(np.ndarray):
 
     def __array_finalize__(self, obj):
         if obj is None:
-            return None
+            return
         self.x = getattr(obj, 'x', None)
         self.y = getattr(obj, 'y', None)
         self.dt = getattr(obj, 'dt', None)
@@ -159,29 +166,36 @@ class Field2D(np.ndarray):
 
     def get_value(self, axis=None, time=None):
         """
-        Description.
+        Returns a tuple of the x grid points, y grid points, and field data.
 
         Parameters
         ----------
+        axis : integer 
+            The index of the velocity component
+        time : integer
+            The index of the time axis to be accessed
 
         Returns
         -------
-
+        tuple
         """
         if axis is None and time is None:
             return  self.x, self.y, np.array(self[0, :, :, 0])
-        return self.x, self.y, np.array(self[axis, :, :, time])
+        else:
+            return self.x, self.y, np.array(self[axis, :, :, time])
 
     def len(self, dimension):
         """
-        Description.
+        Returns the number of points along a given dimension.
 
         Parameters
         ----------
+        dimension : string
+            Must be one of 'x', 'y' or 't'
 
         Returns
         -------
-
+        integer
         """
         if dimension == 'x':
             return self.shape[1]
@@ -189,34 +203,26 @@ class Field2D(np.ndarray):
             return self.shape[2]
         elif dimension == 't':
             return self.shape[3]
+        else:
+            raise ValueError('Dimension must be \'x\',\'y\', or \'t\'')
 
     def ftype(self):
         """
-        Description.
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-
+        Returns if the field is a scalar or vector.
         """
         if self.shape[0] == 1:
             return 'scalar'
-        elif self.shape[0] == 2:
-            return 'vector'
         else:
-            assert()
+            return 'vector'
 
     def save(self, file_path):
         """
-        Description.
+        Saves the dataset to an hdf5 file.
 
         Parameters
         ----------
-
-        Returns
-        -------
+        file_path : string
+            The desired path to save the file.
 
         """
         f = h5py.File(file_path, 'w')
@@ -228,14 +234,22 @@ class Field2D(np.ndarray):
 
     def redim(self, s):
         """
-        Description.
+        Removes edge points from the field. 
+
+        Edge points are often lost when applying differentiation
+        operations at the edges, unless the edge points are explicitly
+        accounted for.
 
         Parameters
         ----------
+        s : integer
+            Number of edge points to be removed.
+            For example if s=2, then 2 edge points will be removed from all
+            spatial dimensions.
 
         Returns
         -------
-
+        Field2D
         """
         return self[:, s:-s, s:-s]
 
