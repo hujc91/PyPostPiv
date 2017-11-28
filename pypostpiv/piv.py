@@ -1,6 +1,6 @@
 from . import piv
-from . import basics
-from . import vortex
+from . import math
+from . import vorticity
 from . import turbulence
 
 import h5py
