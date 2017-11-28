@@ -74,7 +74,7 @@ def ddx(field, method=None):
     Jonathan Deng
     """
     if method == None or method == 'central':
-        new_field = np.zeros(new_field)
+        new_field = field-field
 
         # Apply central differencing in the 'core' region
         new_field[:,1:-1] = (field[:,2:]-field[:,:-2])/field.dL/2
@@ -128,9 +128,16 @@ def ddy(field, method=None):
     Jonathan Deng
     """
     if method == None or method == 'central':
-        new_field = (field[:,1:-1,:-2] - field[:,1:-1,2:])/field.dL/2
-        new_field.x = field.x[1:-1,1:-1]
-        new_field.y = field.y[1:-1,1:-1]
+        new_field = field-field
+
+        # Apply central differencing in the 'core' region
+        new_field[:,:,1:-1] = (field[:,:,2:]-field[:,:,:-2])/field.dL/2
+
+        # Apply second order forward/backward differences at boundaries
+        new_field[:,:,0] = (field[:,:,2] - 2*field[:,:,1] + field[:,:,0]) / \
+                         field.dL**2
+        new_field[:,:,-1] = (field[:,:,-3] - 2*field[:,:,-2] + field[:,:,-1]) / \
+                          field.dL**2
         return new_field
 
     elif method == 'richardson':

@@ -22,8 +22,8 @@ def load(file_path):
     """
     h5file = h5py.File(file_path, 'r')
     field_class = Field2D(
-        h5file['dt'][()], h5file['x'][:],
-        h5file['y'][:], h5file['field'][0], h5file['field'][1])
+        h5file['dt'][()], h5file['x'][:], h5file['y'][:], 
+        [h5file['field'][0], h5file['field'][1]])
     h5file.close()
     return field_class
 
@@ -48,7 +48,7 @@ def convert_vc7(vc7_folder_path, dt):
     import glob
 
     # Get all file path
-    all_vc7_path = glob.glob(os.path.join(vc7_folder_path, '/*.vc7'))
+    all_vc7_path = glob.glob(os.path.join(vc7_folder_path, '*.vc7'))
 
     # Get information of the first frames for Initialization
     first_vbuff, first_vattr = ReadIM.get_Buffer_andAttributeList(all_vc7_path[0])
@@ -72,7 +72,7 @@ def convert_vc7(vc7_folder_path, dt):
 
         xx, yy = np.meshgrid(x, y, indexing='ij')
 
-        data_all_cam.append(piv.Field2D(dt, xx, yy, u, v))
+        data_all_cam.append(piv.Field2D(dt, xx, yy, [u, v]))
 
     #Load velocity vector fields
     for i, vc7_path in enumerate(all_vc7_path):
@@ -114,7 +114,7 @@ def vector(*args):
         if args[0].ftype() is 'scalar' and args[1].ftype() is 'scalar':
             new_field = Field2D(
                 args[0].dt, args[0].x, args[0].y,
-                np.array(args[0][0]), np.array(args[1][0]))
+                [np.array(args[0][0]), np.array(args[1][0])])
             return new_field
         else:
             raise ValueError('Input fields must be scalar')
@@ -132,7 +132,7 @@ class Field2D(np.ndarray):
     field_instance.ddx() for convenience.
     """
 
-    def __new__(cls, dt, x, y, field, *arg):
+    def __new__(cls, dt, x, y, field):
         obj = np.array(field).view(cls)
         obj.dt = dt
         obj.x = x
