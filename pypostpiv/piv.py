@@ -128,7 +128,7 @@ class Field2D(np.ndarray):
 
     All the processing functions (operating only on on field argument) have
     been added as methods to the class. For example:
-    pypostpiv.basics.ddx(field_instance) can also be accessed as
+    pypostpiv.math.ddx(field_instance) can also be accessed as
     field_instance.ddx() for convenience.
     """
 
@@ -255,22 +255,22 @@ class Field2D(np.ndarray):
 
     # Field Basic Operations ---------------------------------------------------
     def fsum(self,axis):
-        return basics.fsum(self,axis=axis)
+        return math.fsum(self,axis=axis)
 
     def mag(self):
-        return basics.mag(self)
+        return math.mag(self)
 
     def fmean(self):
-        return basics.fmean(self)
+        return math.fmean(self)
 
     def rms(self):
-        return basics.rms(self)
+        return math.rms(self)
 
     def ddx(self, method=None):
-        return basics.ddx(self, method)
+        return math.ddx(self, method)
 
     def ddy(self, method=None):
-        return basics.ddy(self, method)
+        return math.ddy(self, method)
 
     # Turbulence Operations ----------------------------------------------------
     def turbulent_kinetic_energy(self):
@@ -281,7 +281,7 @@ class Field2D(np.ndarray):
 
     # Vortex dynamics ----------------------------------------------------------
     def vorticity(self, method=None):
-        return vortex.vorticity(self, method)
+        return vorticity.vorticity(self, method)
 
     def lambda2(self, method=None):
-        return vortex.lambda2(self, method)
+        return vorticity.lambda2(self, method)
