@@ -1,3 +1,7 @@
+"""
+Core utilities
+"""
+
 from . import piv
 from . import math
 from . import vorticity
@@ -20,15 +24,15 @@ def load(file_path):
     -------
     Field2D
     """
-    h5file = h5py.File(file_path, 'r')
-    field_class = Field2D(
-        h5file['dt'][()], h5file['x'][:], h5file['y'][:], 
-        [h5file['field'][0], h5file['field'][1]])
-    h5file.close()
+    field_class = None
+    with h5py.File(file_path, 'r') as f:
+        field_class = Field2D(f['dt'][()], f['x'][:], f['y'][:], 
+                              [f['field'][0], f['field'][1]])
     return field_class
 
 def convert_vc7(vc7_folder_path, dt):
-    """Converts a 2 dimensional, 2 component VC7 file into the HDF5 format.
+    """
+    Converts a 2 dimensional, 2 component VC7 file into the HDF5 format.
 
     Parameters
     ----------
@@ -61,20 +65,24 @@ def convert_vc7(vc7_folder_path, dt):
         u = np.zeros((first_vbuff.nx, first_vbuff.ny, len(all_vc7_path)))
         v = np.zeros((first_vbuff.nx, first_vbuff.ny, len(all_vc7_path)))
 
-        dx =  float(first_vattr_dict['FrameScaleX'+str(n_cam)].splitlines()[0])*first_vbuff.vectorGrid/1000
-        dy = -float(first_vattr_dict['FrameScaleY'+str(n_cam)].splitlines()[0])*first_vbuff.vectorGrid/1000
+        dx =  float(first_vattr_dict['FrameScaleX'+str(n_cam)]
+                    .splitlines()[0])*first_vbuff.vectorGrid/1000
+        dy = -float(first_vattr_dict['FrameScaleY'+str(n_cam)]
+                    .splitlines()[0])*first_vbuff.vectorGrid/1000
 
-        x0 = float(first_vattr_dict['FrameScaleX'+str(n_cam)].splitlines()[1])/1000
-        y0 = float(first_vattr_dict['FrameScaleY'+str(n_cam)].splitlines()[1])/1000
+        x0 = float(first_vattr_dict['FrameScaleX'+str(n_cam)]
+                   .splitlines()[1])/1000
+        y0 = float(first_vattr_dict['FrameScaleY'+str(n_cam)]
+                   .splitlines()[1])/1000
 
-        x = x0 + np.arange(first_vbuff.nx)*dx + dx/2
-        y = y0 - np.arange(first_vbuff.ny)*dy - dy/2
+        x = x0 + dx*(np.arange(first_vbuff.nx) + 1/2)
+        y = y0 - dy*(np.arange(first_vbuff.ny) - 1/2)
 
         xx, yy = np.meshgrid(x, y, indexing='ij')
 
         data_all_cam.append(piv.Field2D(dt, xx, yy, [u, v]))
 
-    #Load velocity vector fields
+    # Load velocity vector fields
     for i, vc7_path in enumerate(all_vc7_path):
         vbuff, vattr = ReadIM.get_Buffer_andAttributeList(vc7_path)
         v_array = ReadIM.buffer_as_array(vbuff)[0]
@@ -225,12 +233,28 @@ class Field2D(np.ndarray):
             The desired path to save the file.
 
         """
-        f = h5py.File(file_path, 'w')
-        f.create_dataset('field', data=self)
-        f.create_dataset('x', data=self.x)
-        f.create_dataset('y', data=self.y)
-        f.create_dataset('dt', data=self.dt)
-        f.close()
+        with h5py.File(file_path, 'w') as f:
+            ## Create dimension datasets
+            f.create_dataset('x', data=self.x)
+            f.create_dataset('y', data=self.y)
+            f.create_dataset('dt', data=self.dt)
+
+            # Set the main field data
+            f.create_dataset('field', data=self)
+
+            # Associate dimension scales and labels with the field
+            f['field'].dims[0].label = 'u'
+            f['field'].dims[1].label = 'x'
+            f['field'].dims[2].label = 'y'
+            f['field'].dims[3].label = 't'
+
+            f['field'].dims.create_scale(f['t'])
+            f['field'].dims.create_scale(f['x'])
+            f['field'].dims.create_scale(f['y'])
+
+            f['field'].dims[1].attach_scale(f['x'])
+            f['field'].dims[2].attach_scale(f['y'])
+            f['field'].dims[3].attach_scale(f['t'])
 
     def redim(self, s):
         """
