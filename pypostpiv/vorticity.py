@@ -1,20 +1,22 @@
-"""A set of functions for analysis of vortex dynamics
+"""
+A set of functions for analysis of vortex dynamics
 """
 
 def vorticity(field, method=None):
-    """Compute the vorticity of the field
+    """
+    Compute the vorticity of the field
 
     Parameters
     ----------
-    field : Field2D
+    field : TensorField
     method: str, optional
         A method for calculation of voritcity. Valid options are:
-        'circulation' - 
+        'circulation' -
         ...
 
     Returns
     -------
-    Field2D
+    TensorField
 
     Author(s)
     ---------
@@ -46,14 +48,14 @@ def lambda2(field, method=None):
 
     Parameters
     ----------
-    field : Field2D
+    field : TensorField
     method: str, optional
         A method for calculation of the lambda2 criterion. Valid options are:
         ...
 
     Returns
     -------
-    Field2D
+    TensorField
 
     Author(s)
     ---------

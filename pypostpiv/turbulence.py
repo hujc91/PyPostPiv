@@ -8,11 +8,11 @@ def turbulent_kinetic_energy(field):
 
     Parameters
     ----------
-    field : Field2D
+    field : TensorField
 
     Returns
     -------
-    Field2D
+    TensorField
 
     Author(s)
     ---------
@@ -26,11 +26,11 @@ def reynolds_shear_stress(field):
 
     Parameters
     ----------
-    field : Field2D
+    field : TensorField
 
     Returns
     -------
-    Field2D
+    TensorField
 
     Author(s)
     ---------

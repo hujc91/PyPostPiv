@@ -2,19 +2,21 @@
 Core utilities
 """
 
-from . import piv
-from . import math
-from . import vorticity
-from . import turbulence
-
-import h5py
-import warnings
-import numpy as np
 import os
+
+# import warnings
+
+import numpy as np
+import h5py
+
+# from . import piv
+# from . import math
+# from . import vorticity
+# from . import turbulence
 
 def load(file_path):
     """
-    Loads a Field2D class stored in an HDF5 file.
+    Returns a TensorField class from a 2D velocity field stored in an hdf5 file.
 
     Parameters
     ----------
@@ -22,13 +24,16 @@ def load(file_path):
 
     Returns
     -------
-    Field2D
+    TensorField
     """
-    field_class = None
+    field = None
     with h5py.File(file_path, 'r') as f:
-        field_class = Field2D(f['dt'][()], f['x'][:], f['y'][:], 
-                              [f['field'][0], f['field'][1]])
-    return field_class
+        shape = f['field'].shape
+        dx = (f['x'][1]-f['x'][0],
+              f['y'][1]-f['y'][0])
+        field = TensorField(shape[:-1], shape[-1:], dx=dx)
+        field[...] = f['field'][...]
+    return field
 
 def convert_vc7(vc7_folder_path, dt):
     """
@@ -65,8 +70,8 @@ def convert_vc7(vc7_folder_path, dt):
         u = np.zeros((first_vbuff.nx, first_vbuff.ny, len(all_vc7_path)))
         v = np.zeros((first_vbuff.nx, first_vbuff.ny, len(all_vc7_path)))
 
-        dx =  float(first_vattr_dict['FrameScaleX'+str(n_cam)]
-                    .splitlines()[0])*first_vbuff.vectorGrid/1000
+        dx = float(first_vattr_dict['FrameScaleX'+str(n_cam)]
+                   .splitlines()[0])*first_vbuff.vectorGrid/1000
         dy = -float(first_vattr_dict['FrameScaleY'+str(n_cam)]
                     .splitlines()[0])*first_vbuff.vectorGrid/1000
 
@@ -78,9 +83,14 @@ def convert_vc7(vc7_folder_path, dt):
         x = x0 + dx*(np.arange(first_vbuff.nx) + 1/2)
         y = y0 - dy*(np.arange(first_vbuff.ny) - 1/2)
 
-        xx, yy = np.meshgrid(x, y, indexing='ij')
+        # xx, yy = np.meshgrid(x, y, indexing='ij')
 
-        data_all_cam.append(piv.Field2D(dt, xx, yy, [u, v]))
+        field_dx = (x[1]-x[0], y[1]-y[0])
+        field = TensorField(u.shape, (2,), dx=field_dx)
+        field[..., 0] = u
+        field[..., 1] = v
+
+        data_all_cam.append(field)
 
     # Load velocity vector fields
     for i, vc7_path in enumerate(all_vc7_path):
@@ -96,216 +106,464 @@ def convert_vc7(vc7_folder_path, dt):
             scaleI = float(ReadIM.att2dict(vattr)['FrameScaleI'+str(n_cam)].splitlines()[0])
 
             # Load velocity
-            data[0,:,:,i] =  (v_array[1+n_cam*10]*scaleI*mask).T
-            data[1,:,:,i] = -(v_array[2+n_cam*10]*scaleI*mask).T
+            data[0, ..., i] = (v_array[1+n_cam*10]*scaleI*mask).T
+            data[1, ..., i] = -(v_array[2+n_cam*10]*scaleI*mask).T
 
     return tuple(data_all_cam)
 
-def vector(*args):
+class TensorField(np.ndarray):
     """
-    Combines a set of scalar fields into a vector field.
+    A class representing a tensor field.
+
+    Notes
+    -----
+    Two main attributes (_field_dx, _tensor_ndim) control how the array is interpreted into field
+    and tensor portions. Operations that affect array shape must update these values in accordance
+    with what the operation is meant to represent.
 
     Parameters
     ----------
-    *args : array_like
-        a set of scalar fields
 
-    Returns
-    -------
-    Field2D
-
-    Author(s)
-    ---------
-    Jia Cheng Hu
+    Attributes
+    ----------
+    _field_dx : tuple of floats and/or None
+        Grid spacing for each of the field axes
+    _tensor_ndim : int
+        The dimension of the tensor
+    _field_label : tuple of strings
+        Probably would be useful to have?
     """
-    if len(args) == 2:
-        if args[0].ftype() is 'scalar' and args[1].ftype() is 'scalar':
-            new_field = Field2D(
-                args[0].dt, args[0].x, args[0].y,
-                [np.array(args[0][0]), np.array(args[1][0])])
-            return new_field
-        else:
-            raise ValueError('Input fields must be scalar')
-    else:
-        raise NotImplementedError(
-            'Only 2 velocity component vector fields are currently supported')
+    def __new__(cls, field_shape, tensor_shape, dtype=float, buffer=None,
+                offset=0, strides=None, order=None):
+        obj = super(TensorField, cls).__new__(
+            cls, field_shape+tensor_shape, dtype, buffer, offset, strides, order)
 
-class Field2D(np.ndarray):
-    """
-    This class represents a 2D vector field in time and space.
+        obj._field_dx = tuple([None if obj.shape[ii] == 1 else 1 for ii in range(len(field_shape))])
+        obj._tensor_ndim = len(tensor_shape)
 
-    All the processing functions (operating only on on field argument) have
-    been added as methods to the class. For example:
-    pypostpiv.math.ddx(field_instance) can also be accessed as
-    field_instance.ddx() for convenience.
-    """
-
-    def __new__(cls, dt, x, y, field):
-        obj = np.array(field).view(cls)
-        obj.dt = dt
-        obj.x = x
-        obj.y = y
-        obj.dL = np.abs(obj.x[0,0] - obj.x[1,0])
-
-        if len(obj.shape) == 6:
-            obj = obj[:,:,:,np.newaxis]
         return obj
 
     def __array_finalize__(self, obj):
+        # type(obj) differs based on the method of instance creation:
+        # From explicit constructor -> None
+        # From view casting -> any subclass of np.ndarray
+        # From new-from template -> an instance of our own subclass of np.ndarray
         if obj is None:
             return
-        self.x = getattr(obj, 'x', None)
-        self.y = getattr(obj, 'y', None)
-        self.dt = getattr(obj, 'dt', None)
-        self.dL = getattr(obj, 'dL', None)
 
-    def u(self, axis, time=None):
-        """
-        Gets a component of the velocity field, 0 for u, 1 for v.
+        # Set default values for TensorField attributes. We set default values unless the obj is an
+        # instance of our own class, in which case we copy the objects attributes.
+        self._field_dx = getattr(obj, 'field_dx', (1, )*obj.ndim)
+        self._tensor_ndim = getattr(obj, 'tensor_ndim', 0)
 
-        This returns the field with the specific component of the velocity
-        at all times. If the time argument is specified, only that time
-        is returned.
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         """
-        if time is None:
-            return self[axis:axis+1]
-        else:
-            return self[axis:axis+1, :, :, time:time+1]
+        Override logic for numpy's __array_ufunc__ method.
 
-    def get_value(self, axis=None, time=None):
-        """
-        Returns a tuple of the x grid points, y grid points, and field data.
+        There are two main classes of ufuncs: scalar ufuncs have
+        'ufunc.signature is None' while generalized ufuncs (gufuncs) have a
+        ufunc.signature string. These two cases are handled slightly differently.
 
         Parameters
         ----------
-        axis : integer 
-            The index of the velocity component
-        time : integer
-            The index of the time axis to be accessed
+        ufunc : np.ufunc object
+        method : str
+            One of:
+            '__call__' (indicates it was called directly)
+            'accumulate'
+            'reduceat'
+            'outer'
+            'at'
+        inputs : tuple
+            Input arguments to ufunc
+        kwargs :
+            Any additional arguments to ufunc
 
         Returns
         -------
-        tuple
+        stuff
         """
-        if axis is None and time is None:
-            return  self.x, self.y, np.array(self[0, :, :, 0])
+        ## Conversion of inputs to ndarray types
+        # First convert all inputs and outputs that are instances of our subclass
+        # to views of ndarray and pass it off to the super class __array_ufunc__
+        # method
+        if kwargs.pop('out', None) is not None:
+            # Haven't implemented how setting an output should work yet!
+            return NotImplemented
+
+        outputs = None
+        converted_outputs = list()
+        tensor_output_idxs = list()
+        if outputs is None:
+            converted_outputs = None
         else:
-            return self.x, self.y, np.array(self[axis, :, :, time])
+            for ii, output in enumerate(outputs):
+                if isinstance(output, TensorField):
+                    tensor_output_idxs.append(ii)
+                    converted_outputs.append(output.view(np.ndarray))
+                else:
+                    converted_outputs.append(output)
 
-    def len(self, dimension):
-        """
-        Returns the number of points along a given dimension.
+        converted_inputs = list()
+        tensor_input_idxs = list()
+        tensor_inputs = list()
+        for ii, _input in enumerate(inputs):
+            if isinstance(_input, TensorField):
+                tensor_inputs.append(_input)
+                tensor_input_idxs.append(ii)
+                converted_inputs.append(_input.view(np.ndarray))
+            else:
+                converted_inputs.append(_input)
 
-        Parameters
-        ----------
-        dimension : string
-            Must be one of 'x', 'y' or 't'
+        ## Determination of output field attributes/field compatibility
+        # Loop through all TensorField inputs and broadcast their
+        # field dimensions to an output TensorField dimension
+        # Now broadcast the field dimensions
+        dx = list()
+        dxs = [tensor_input.field_dx for tensor_input in tensor_inputs]
 
-        Returns
-        -------
-        integer
-        """
-        if dimension == 'x':
-            return self.shape[1]
-        elif dimension == 'y':
-            return self.shape[2]
-        elif dimension == 't':
-            return self.shape[3]
+        max_field_ndim = 0
+        for _field_dx in dxs:
+            if max_field_ndim < len(_field_dx):
+                max_field_ndim = len(_field_dx)
+
+        for ii in range(max_field_ndim):
+            dx.append(None)
+            for _field_dx in dxs:
+                if len(_field_dx) < ii:
+                    pass
+                elif _field_dx[-1-ii] is None:
+                    pass
+                else:
+                    if dx[ii] is None:
+                        dx[ii] = _field_dx[-1-ii]
+                    else:
+                        if dx[ii] != _field_dx[-1-ii]:
+                            return NotImplemented
+        dx = list(reversed(dx))
+
+        ## Perform the ufunc calculation
+        _results = super(TensorField, self).__array_ufunc__(ufunc, method, *converted_inputs,
+                                                            **kwargs)
+        if _results is NotImplemented:
+            return NotImplemented
+
+        if ufunc.nout == 1:
+            _results = (_results, )
+
+        ## Set output TensorField attributes
+        results = list()
+        if ufunc.signature is None:
+            # For a scalar ufunc:
+            # All inputs that are instances of our subclass must have the same
+            # tensor order. Outputs will have the same tensor dimension
+            tensor_ndim = tensor_inputs[0].tensor_ndim
+            for tensor_input in tensor_inputs[1:]:
+                if tensor_ndim != tensor_input.tensor_ndim:
+                    return NotImplemented
+
+            # The value of method (only occurs for scalar ufuncs) can influence
+            # if any dimensions are created or lost.
+            # Possible values are '__call__' 'reduce', 'reduceat', 'accumulate',
+            # 'outer' and 'inner'
+            # These methods can influence the TensorField attribute: dx,
+            # tensor_ndim, blah blah blah
+            if method == '__call__':
+                # This doesn't affect shape so don't need to do anything
+                pass
+            elif method == 'reduce':
+                # In this case, dimensions can be lost, changing the shape
+                # of the broadcaster dimensions
+                if kwargs['keepdims']:
+                    pass
+                    # In this case, the reduced dimension is left as a singular
+                    # dimension. Maybe you want to make the dx for given axis
+                    # a null value?
+                else:
+                    # We either have to get rid of one of the dx attribute entries,
+                    # or one of the 'core tensor' entries
+                    if kwargs['axis'] < len(dx):
+                        dx.pop(kwargs['axis'])
+                    else:
+                        tensor_ndim = tensor_ndim-1
+            elif method == 'reduceat':
+                # don't know how this works do not going to do it!
+                return NotImplemented
+            elif method == 'accumulate':
+                # This doesn't affect shape so don't need to do anything
+                pass
+            elif method == 'outer':
+                # don't know how this works do not going to do it!
+                return NotImplemented
+            elif method == 'inner':
+                # numpy documentation is a bit weird on this one... I assume this
+                # corresponds to ufunc.at, in which case we don't have to modify
+                # anything since this type of call preserves the shape
+                pass
+            else:
+                print("Hi mom!")
+                return NotImplemented
+
+            for result in _results:
+                result = result.view(TensorField)
+                result._tensor_ndim = tensor_ndim
+                result._field_dx = tuple(dx)
+                results.append(result)
         else:
-            raise ValueError('Dimension must be \'x\',\'y\', or \'t\'')
+            # For a gufunc:
+            # any inputs or outputs that are instances of our subclass
+            # must have the tensor dimension equal to the number of core dimensions
+            # for the corresponding input/output in ufunc.signature
+            # The output tensor dimension(s) are the same as the corresponding
+            # output core dimension(s) in ufunc.signature
+            in_sigs, out_sigs = np.lib.function_base._parse_gufunc_signature(ufunc.signature)
 
-    def ftype(self):
-        """
-        Returns if the field is a scalar or vector.
-        """
-        if self.shape[0] == 1:
-            return 'scalar'
+            tensor_in_sigs = [in_sigs[ii] for ii in tensor_input_idxs]
+            for tensor_input, tensor_in_sig in zip(tensor_inputs, tensor_in_sigs):
+                if len(tensor_in_sig) != tensor_input.tensor_ndim:
+                    return NotImplemented
+
+            tensor_out_sigs = out_sigs
+            for result, tensor_out_sig in zip(_results, tensor_out_sigs):
+                result = result.view(TensorField)
+                result._tensor_ndim = len(tensor_out_sig)
+                result._field_dx = dx
+                results.append(result)
+
+        return results[0] if len(results) == 1 else results
+
+    def __repr__(self):
+        return f"TensorField({self.field_shape}, {self.tensor_shape})"
+
+    ## Override shape influencing special methods
+    # We also have to modify ndarray methods that can change the shape of the data. In these cases
+    # we have to modify the field and/or tensor attributes
+    # These are:
+    # __get_item__,  __set_item__
+    def __getitem__(self, indices):
+        # Determine which indices have been sliced, and which have been integer
+        # indexed. An integer index(s) will either remove elements from
+        # _field_dx, or reduce the dimensionality of the tensor (depends where the
+        # index is)
+        if isinstance(indices, tuple):
+            # Here we probably have a basic index. If we don't, let np.ndarray's
+            # __getitem__ deal with it
+            res = super(TensorField, self).__getitem__(indices)
+            if not isinstance(res, TensorField):
+                return res
+
+            # Expand the indices with any ellipsis so that we have one entry for each index
+            # The final length of the expanded indices depends on the number of np.newaxis (None)
+            # objects in indices
+            expanded_indices = None
+            if Ellipsis in indices:
+                ii = indices.index(Ellipsis)
+                expanded_indices = indices[:ii] + \
+                                   (Ellipsis, )*(self.ndim-len(indices)+1) \
+                                   + indices[ii+1:]
+            else:
+                expanded_indices = indices + (slice(None), )*(self.ndim-len(indices))
+            assert len(expanded_indices) == self.ndim
+
+            # Part of expanded_indices index the field axes, while the remaining portion index the
+            # tensor axes. Determine the index, ii, at which to split expanded_indices
+            ii = 0
+            count_field_index = 0
+            while count_field_index < self.ndim-self.tensor_ndim:
+                if expanded_indices[ii] is not None:
+                    count_field_index += 1
+                ii += 1
+            field_indices = expanded_indices[:ii]
+            tensor_indices = expanded_indices[ii:]
+
+            dx = list()
+            ii = 0
+            for index in field_indices:
+                if index is None:
+                    dx.append(None)
+                elif isinstance(index, int):
+                    ii = ii+1
+                else:
+                    dx.append(self.field_dx[ii])
+                    ii = ii+1
+            #assert ii == self.field_ndim
+
+            # Set attributes according to the indices
+            res._field_dx = tuple(dx)
+
+            is_none = [index for index in tensor_indices if index is None]
+            is_int = [index for index in tensor_indices if isinstance(index, int)]
+            res._tensor_ndim = self.tensor_ndim + len(is_none) - len(is_int)
+
+            return res
         else:
-            return 'vector'
+            # Here we probably have an advanced index. If we don't, let ndarray's __getitem__ throw
+            # an error
+            # It's difficult to tell what kind of shape you'll get with advanced indexing, so always
+            # return as an ndarray.
+            return super(TensorField, self).__getitem__(indices).view(np.ndarray)
 
-    def save(self, file_path):
+    def __setitem__(self, indices, value):
+        ## Explicitly perform the data setting using a view of TensorField as
+        # an ndarray.
+        # See: https://docs.scipy.org/doc/numpy/reference/arrays.indexing.html
+        return np.ndarray.__setitem__(self.view(np.ndarray), indices, value)
+
+    # as well as:
+    def choose(self, choices, out=None, mode='raise'):
+        raise NotImplementedError('TensorField.choose is not yet implemented.')
+
+    def compress(self, condition, axis=None, out=None):
+        raise NotImplementedError('TensorField.compress is not yet implemented.')
+
+    def diagonal(self, offset=0, axis1=0, axis2=1):
+        raise NotImplementedError('TensorField.diagonal is not yet implemented.')
+
+    def flatten(self, order='C'):
+        raise NotImplementedError('TensorField.flatten is not yet implemented.')
+
+    def ravel(self, order='C'):
+        raise NotImplementedError('TensorField.ravel is not yet implemented.')
+
+    def repeat(self, repeats, axis=None):
+        raise NotImplementedError('TensorField.repeat is not yet implemented.')
+
+    def reshape(self, new_shape):
+        raise NotImplementedError('TensorField.reshape is not yet implemented.')
+
+    def resize(self, new_shape):
+        raise NotImplementedError('TensorField.resize is not yet implemented.')
+
+    def squeeze(self, axis=None):
+        raise NotImplementedError('TensorField.squeeze is not yet implemented.')
+
+    def swapaxes(self, axis1, axis2):
+        raise NotImplementedError('TensorField.swapaxes is not yet implemented.')
+
+    def take(self, indices, axis=None, out=None, mode='raise'):
+        raise NotImplementedError('TensorField.take is not yet implemented.')
+
+    def transpose(self, *axes):
+        raise NotImplementedError('TensorField.transpose is not yet implemented.')
+
+    @property
+    def T(self):
+        """Returns the transpose of the data."""
+        raise NotImplementedError('TensorField.T is not yet implemented.')
+
+    ## New methods
+    def tensor_reshape(self, shape):
+        """Reshapes the tensor portion of the array."""
+
+    def field_reshape(self, shape):
+        """Reshapes the field portion of the array."""
+
+    ## Properties
+    @property
+    def field_dx(self):
         """
-        Saves the dataset to an hdf5 file.
-
-        Parameters
-        ----------
-        file_path : string
-            The desired path to save the file.
-
+        Returns the field grid spacing data.
         """
-        with h5py.File(file_path, 'w') as f:
-            ## Create dimension datasets
-            f.create_dataset('x', data=self.x)
-            f.create_dataset('y', data=self.y)
-            f.create_dataset('dt', data=self.dt)
+        return self._field_dx
 
-            # Set the main field data
-            f.create_dataset('field', data=self)
-
-            # Associate dimension scales and labels with the field
-            f['field'].dims[0].label = 'u'
-            f['field'].dims[1].label = 'x'
-            f['field'].dims[2].label = 'y'
-            f['field'].dims[3].label = 't'
-
-            f['field'].dims.create_scale(f['t'])
-            f['field'].dims.create_scale(f['x'])
-            f['field'].dims.create_scale(f['y'])
-
-            f['field'].dims[1].attach_scale(f['x'])
-            f['field'].dims[2].attach_scale(f['y'])
-            f['field'].dims[3].attach_scale(f['t'])
-
-    def redim(self, s):
+    @property
+    def field_shape(self):
         """
-        Removes edge points from the field. 
-
-        Edge points are often lost when applying differentiation
-        operations at the edges, unless the edge points are explicitly
-        accounted for.
-
-        Parameters
-        ----------
-        s : integer
-            Number of edge points to be removed.
-            For example if s=2, then 2 edge points will be removed from all
-            spatial dimensions.
-
-        Returns
-        -------
-        Field2D
+        Returns the shape of the field.
         """
-        return self[:, s:-s, s:-s]
+        return self.shape[:-self.tensor_ndim]
 
-    # Field Basic Operations ---------------------------------------------------
-    def fsum(self,axis):
-        return math.fsum(self,axis=axis)
+    @property
+    def tensor_shape(self):
+        """
+        Returns the shape of the tensor.
+        """
+        return self.shape[-self.tensor_ndim:]
 
-    def mag(self):
-        return math.mag(self)
+    @property
+    def field_ndim(self):
+        """
+        Returns the dimension of the field.
+        """
+        return self.ndim - self.tensor_ndim
 
-    def fmean(self):
-        return math.fmean(self)
+    @property
+    def tensor_ndim(self):
+        """
+        Returns the dimension (order) of the tensor.
+        """
+        return self._tensor_ndim
 
-    def rms(self):
-        return math.rms(self)
+    # The following are convenience properties for the common use case of 3 dimensional velocity
+    # fields
+    @property
+    def u(self):
+        """
+        Returns the u component of a vector field.
+        """
+        if self.tensor_ndim == 1:
+            return self[..., 0]
+        else:
+            raise NotImplementedError(
+                f"'u' doesn't exist for order {self.tensor_ndim} tensor.")
 
-    def ddx(self, method=None):
-        return math.ddx(self, method)
+    @property
+    def v(self):
+        """
+        Returns the v component of a vector field.
+        """
+        if self.tensor_ndim != 1:
+            raise NotImplementedError(
+                f"'v' doesn't exist for order {self.tensor_ndim} tensor.")
+        elif self.tensor_shape[0] < 1:
+            raise NotImplementedError(
+                f"'v' doesn't exist for {self.tensor_shape[0]}D vector.")
+        else:
+            return self[..., 1]
 
-    def ddy(self, method=None):
-        return math.ddy(self, method)
+    @property
+    def w(self):
+        """
+        Returns the w component of a vector field.
+        """
+        if self.tensor_ndim != 1:
+            raise NotImplementedError(
+                f"'w' doesn't exist for order {self.tensor_ndim} tensor.")
+        elif self.tensor_shape[0] < 2:
+            raise NotImplementedError(
+                f"'w' doesn't exist for {self.tensor_shape[0]}D vector.")
+        else:
+            return self[..., 2]
 
-    # Turbulence Operations ----------------------------------------------------
-    def turbulent_kinetic_energy(self):
-        return turbulence.turbulent_kinetic_energy(self)
+    @property
+    def dx(self):
+        """
+        Returns the 'x' field grid spacing for a <3D field.
+        """
+        if self.field_ndim > 3 or self.field_ndim < 1:
+            raise NotImplementedError(
+                f"'dx' is undefined for {self.field_ndim} dimensional field")
+        else:
+            return self.field_dx[0]
 
-    def reynolds_shear_stress(self):
-        return turbulence.reynolds_shear_stress(self)
+    @property
+    def dy(self):
+        """
+        Returns the 'y' field grid spacing for a <3D field.
+        """
+        if self.field_ndim > 3 or self.field_ndim < 2:
+            raise NotImplementedError(
+                f"'dy' is undefined for {self.field_ndim} dimensional field")
+        else:
+            return self.field_dx[1]
 
-    # Vortex dynamics ----------------------------------------------------------
-    def vorticity(self, method=None):
-        return vorticity.vorticity(self, method)
-
-    def lambda2(self, method=None):
-        return vorticity.lambda2(self, method)
+    @property
+    def dz(self):
+        """
+        Returns the 'z' field grid spacing for a <3D field.
+        """
+        if self.field_ndim != 3:
+            raise NotImplementedError(
+                f"'dz' is undefined for {self.field_ndim} dimensional field")
+        else:
+            return self.field_dx[2]
