@@ -118,18 +118,22 @@ class TensorField(np.ndarray):
     Notes
     -----
     Two main attributes (_field_dx, _tensor_ndim) control how the array is interpreted into field
-    and tensor portions. Operations that affect array shape must update these values in accordance
-    with what the operation is meant to represent.
+    and tensor portions. Operations that affect array shape must should update these values
+    depending on what the operation is meant to represent. For example, a norm over a tensor axis
+    should reduce the tensor dimension by 1.
+
+    For ufuncs, this is implemented in the __array_ufunc__ logic. Functions affecting shape that are
+    not ufuncs must implement this manually.
 
     Parameters
     ----------
 
     Attributes
     ----------
-    _field_dx : tuple of floats and/or None
-        Grid spacing for each of the field axes
     _tensor_ndim : int
         The dimension of the tensor
+    _field_dx : tuple of floats and/or None
+        Grid spacing for each of the field axes
     _field_label : tuple of strings
         Probably would be useful to have?
     """
