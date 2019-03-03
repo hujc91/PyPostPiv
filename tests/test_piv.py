@@ -32,11 +32,14 @@ res = fielda + arrayb
 print(f"{type(fielda)} + {type(arrayb)} -> {type(res)}")
 print(f"{fielda.field_dx} + {type(arrayb)} -> {res.field_dx}")
 
-#import ipdb; ipdb.set_trace()
+import ipdb; ipdb.set_trace()
 test = fielda[..., 0]
 fielda[..., 0] = 123
 
-test = fielda['field', 0]
+test = fielda['field', 0, ...]
+
+fielda['field', 0] = 99
+fielda['tensor', 0] = -1
 
 #print(fielda[..., 0:3, |, ..., 0:2])
 
@@ -49,5 +52,6 @@ print(f"repr(fielda[:, 0, :, ...]) >>> {repr(fielda[:, 0, :, ...])}")
 print("\nTesting sum")
 res = np.sum(fielda, axis=1)
 print(f"type(np.cumsum(fielda, axis=0)) -> {type(res)}")
-print(f"np.cumsum(fielda, axis=0).dx -> {res.field_dx}")
+print(f"np.cumsum(fielda, axis=0).field_dx -> {res.field_dx}")
+print(f"np.cumsum(fielda, axis=0).field_labels -> {res.field_labels}")
 print(f"np.cumsum(fielda, axis=0).shape -> {res.shape}")

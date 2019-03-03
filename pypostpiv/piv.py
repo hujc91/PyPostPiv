@@ -5,6 +5,7 @@ Core utilities
 import os
 
 # import warnings
+import itertools
 
 import numpy as np
 import h5py
@@ -144,6 +145,41 @@ def _index_at_count(iterable, condition, n):
                 return ii
     return None
 
+def _parse_label_indices():
+    """
+    Returns field and tensor indices given field labels and label style indices.
+    """
+    pass
+
+def _broadcast(*args):
+    """
+    Returns an output tuple, where each entry in the list is determined from the elements in args
+    with each arg in args right aligned.
+
+    Parameters
+    ----------
+    broadcast_func(values) : function
+        Returns a single value based on the values in the list. Otherwise return not implemented.
+    """
+    res = list()
+    for values in itertools.zip_longest(*[reversed(arg) for arg in args]):
+        if len(values) == 1:
+            res.append(values[0])
+        else:
+            broadcasted_val = values[0]
+            for val in values[1:]:
+                if val != broadcasted_val and broadcasted_val is None:
+                    broadcasted_val = val
+                elif val is None or val == broadcasted_val:
+                    pass
+                    # Keep current value
+                else:
+                    # Have conflicting values so force it to None
+                    broadcasted_val = None
+                    break
+            res.append(broadcasted_val)
+    return list(reversed(res))
+
 class TensorField(np.ndarray):
     """
     A class representing a tensor field.
@@ -258,28 +294,11 @@ class TensorField(np.ndarray):
         # Loop through all TensorField inputs and broadcast their
         # field dimensions to an output TensorField dimension
         # Now broadcast the field dimensions
-        dx = list()
-        dxs = [tensor_input.field_dx for tensor_input in tensor_inputs]
+        inputs_field_dx = [tensor_input.field_dx for tensor_input in tensor_inputs]
+        inputs_field_labels = [tensor_input.field_labels for tensor_input in tensor_inputs]
 
-        max_field_ndim = 0
-        for _field_dx in dxs:
-            if max_field_ndim < len(_field_dx):
-                max_field_ndim = len(_field_dx)
-
-        for ii in range(max_field_ndim):
-            dx.append(None)
-            for _field_dx in dxs:
-                if len(_field_dx) < ii:
-                    pass
-                elif _field_dx[-1-ii] is None:
-                    pass
-                else:
-                    if dx[ii] is None:
-                        dx[ii] = _field_dx[-1-ii]
-                    else:
-                        if dx[ii] != _field_dx[-1-ii]:
-                            return NotImplemented
-        dx = list(reversed(dx))
+        field_labels = _broadcast(*inputs_field_labels)
+        field_dx = _broadcast(*inputs_field_dx)
 
         ## Perform the ufunc calculation
         _results = super(TensorField, self).__array_ufunc__(ufunc, method, *converted_inputs,
@@ -305,7 +324,7 @@ class TensorField(np.ndarray):
             # if any dimensions are created or lost.
             # Possible values are '__call__' 'reduce', 'reduceat', 'accumulate',
             # 'outer' and 'inner'
-            # These methods can influence the TensorField attribute: dx,
+            # These methods can influence the TensorField attribute: field_dx,
             # tensor_ndim, blah blah blah
             if method == '__call__':
                 # This doesn't affect shape so don't need to do anything
@@ -316,13 +335,14 @@ class TensorField(np.ndarray):
                 if kwargs['keepdims']:
                     pass
                     # In this case, the reduced dimension is left as a singular
-                    # dimension. Maybe you want to make the dx for given axis
+                    # dimension. Maybe you want to make the field_dx for given axis
                     # a null value?
                 else:
-                    # We either have to get rid of one of the dx attribute entries,
+                    # We either have to get rid of one of the field_dx attribute entries,
                     # or one of the 'core tensor' entries
-                    if kwargs['axis'] < len(dx):
-                        dx.pop(kwargs['axis'])
+                    if kwargs['axis'] < len(field_dx):
+                        field_dx.pop(kwargs['axis'])
+                        field_labels.pop(kwargs['axis'])
                     else:
                         tensor_ndim = tensor_ndim-1
             elif method == 'reduceat':
@@ -345,8 +365,9 @@ class TensorField(np.ndarray):
 
             for result in _results:
                 result = result.view(TensorField)
+                result._field_dx = tuple(field_dx)
+                result._field_labels = tuple(field_labels)
                 result._tensor_ndim = tensor_ndim
-                result._field_dx = tuple(dx)
                 results.append(result)
         else:
             # For a gufunc:
@@ -365,14 +386,15 @@ class TensorField(np.ndarray):
             tensor_out_sigs = out_sigs
             for result, tensor_out_sig in zip(_results, tensor_out_sigs):
                 result = result.view(TensorField)
+                result._field_dx = tuple(field_dx)
+                result._field_labels = tuple(field_labels)
                 result._tensor_ndim = len(tensor_out_sig)
-                result._field_dx = dx
                 results.append(result)
 
         return results[0] if len(results) == 1 else results
 
     def __repr__(self):
-        return f"TensorField({self.field_shape}, {self.tensor_shape})"
+        return f"TensorField({self.field_shape}, {self.tensor_shape})" + f"\n{np.ndarray.__repr__(self.view(np.ndarray))}"
 
     ## Override shape influencing special methods
     # We also have to modify ndarray methods that can change the shape of the data. In these cases
@@ -381,14 +403,14 @@ class TensorField(np.ndarray):
     # __get_item__,  __set_item__
     def __getitem__(self, indices):
         has_strs = [index for index in indices if isinstance(index, str)]
-        has_valid_slice = [index for index in indices if isinstance(index, (slice, int)) 
+        has_valid_slice = [index for index in indices if isinstance(index, (slice, int))
                                                          or index is None or index is ...]
         has_advanced_index = [index for index in indices if isinstance(index, (list, np.ndarray))]
-        import ipdb; ipdb.set_trace()
+
         if len(has_valid_slice) == len(indices):
             ## Numpy Style Basic Indexing
-            # There's an edge case with multiple new axes inserted between the field and tensor 
-            # dimensions, since it's not clear which ones go to the tensor and which ones to the 
+            # There's an edge case with multiple new axes inserted between the field and tensor
+            # dimensions, since it's not clear which ones go to the tensor and which ones to the
             # field. As a result, just assume they all go to the tensor
             # Calculate a split, ii, to split the indices into field and tensor portions
             indices = _expand_indices(indices, self.ndim)
@@ -396,7 +418,7 @@ class TensorField(np.ndarray):
 
             field_indices = indices[:ii+1]
             tensor_indices = indices[ii+1:]
-            return self.__getitem_tf(field_indices, tensor_indices)       
+            return self._getitem_tf(field_indices, tensor_indices)
         elif has_advanced_index:
             ## Numpy Style Advanced Indexing
             # Here we probably have an advanced index.
@@ -443,15 +465,15 @@ class TensorField(np.ndarray):
                 ii, jj = label_to_ind.pop('field')
                 indices_field = indices[ii:jj]
             else:
-                indices = [slice(None)] * self.field_ndim
+                indices_field = [slice(None)] * self.field_ndim
                 for label in label_to_ind:
                     ii, jj = label_to_ind.pop(label)
                     indices_field[ii] = indices[ii:jj]
 
             if label_to_ind:
                 raise IndexError('Field labels were not found.')
-           
-            return self.__getitem_tf(tuple(indices_field), indices_tensor)
+
+            return self._getitem_tf(tuple(indices_field), tuple(indices_tensor))
         elif isinstance(indices, dict):
             ## Xarray Style Labelled Indexing
             # Dictionary style indexing like that from xarray!
@@ -460,7 +482,7 @@ class TensorField(np.ndarray):
         else:
             raise ValueError("Unknown index style.")
 
-    def __getitem_tf(self, field_indices, tensor_indices):
+    def _getitem_tf(self, field_indices, tensor_indices):
         """Returns a sliced field based on seperate indices for the field and tensor."""
 
         field_indices = _expand_indices(field_indices, self.field_ndim)
@@ -496,7 +518,10 @@ class TensorField(np.ndarray):
         ## Explicitly perform the data setting using a view of TensorField as
         # an ndarray.
         # See: https://docs.scipy.org/doc/numpy/reference/arrays.indexing.html
-        return np.ndarray.__setitem__(self.view(np.ndarray), indices, value)
+        # TODO: will this even work with advanced indices?
+        res = self.__getitem__(indices)
+        res.view(np.ndarray)[...] = value
+        #np.ndarray.__setitem__(self.view(np.ndarray), indices, value)
 
     # as well as:
     def choose(self, choices, out=None, mode='raise'):
@@ -567,14 +592,20 @@ class TensorField(np.ndarray):
         """
         Returns the shape of the field.
         """
-        return self.shape[:-self.tensor_ndim]
+        if self.tensor_ndim == 0:
+            return self.shape
+        else:
+            return self.shape[:-self.tensor_ndim]
 
     @property
     def tensor_shape(self):
         """
         Returns the shape of the tensor.
         """
-        return self.shape[-self.tensor_ndim:]
+        if self.tensor_ndim == 0:
+            return ()
+        else:
+            return self.shape[-self.tensor_ndim:]
 
     @property
     def field_ndim(self):

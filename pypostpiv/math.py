@@ -51,6 +51,54 @@ def rms(field):
     """
     return np.nanstd(field, axis=3, keepdims=True)
 
+def derivative(field, dim='x', method='central'):
+    """
+    Compute the derivative of a field with respect to dim.
+
+    Parameters
+    ----------
+    field : TensorField
+    dim : string, optional
+        Defaults to the x axis.
+    method : string, optional
+        Must be one of:
+        'central' - central difference scheme, second order accuracy (default)
+        'richardson' - Richardson extrapolation scheme, third order accuracy
+        'lsq' - least square scheme, second order accuracy
+
+    Returns
+    -------
+    Field2d
+
+    Author(s)
+    ---------
+    Jia Cheng Hu
+    """
+    new_field = None
+    if method == 'central':
+        new_field = field.copy()
+
+        # Apply central differencing in the 'core' region
+        new_field[dim, 1:-1] = (field[dim, 2:]-field[dim, :-2])/field.dx/2
+
+        # Apply second order forward/backward differences at boundaries
+        new_field[dim, 0] = (field[dim, 2] - 2*field[dim, 1] + field[dim, 0]) / field.dx**2
+        new_field[dim, -1] = (field[dim, -3] - 2*field[dim, -2] + field[dim, -1]) / field.dx**2
+    elif method == 'richardson':
+        new_field = field.copy().fill(np.nan)
+        new_field[dim, 2:-2] = field[dim, :-4] - field[dim, 4:] + 8*field[dim, 3:-1] - 8*field[dim, 1:-3]
+        new_field = new_field/field.dx/12
+    elif method == 'lsq':
+        new_field = field.copy().fill(np.nan)
+
+        new_field[dim, 2:-2] = 2*field[dim, 4:] - 2*field[dim, :-4] + field[dim, 3:-1] \
+                               - field[dim, 1:-3]
+        new_field = new_field/field.dx/10
+    else:
+        raise ValueError("'method' must be one of 'central', 'richardson', or 'lsq'")
+
+    return new_field
+
 def ddx(field, method='central'):
     """
     Compute the derivative of a field with respect to the x-axis.
