@@ -36,6 +36,10 @@ print(f"{fielda.field_dx} + {type(arrayb)} -> {res.field_dx}")
 test = fielda[..., 0]
 fielda[..., 0] = 123
 
+test = fielda['field', 0]
+
+#print(fielda[..., 0:3, |, ..., 0:2])
+
 print(f"repr(fielda[:, 0, :, ...]) >>> {repr(fielda[:, 0, :, ...])}")
 
 #np.ravel(fielda)

@@ -111,6 +111,39 @@ def convert_vc7(vc7_folder_path, dt):
 
     return tuple(data_all_cam)
 
+def _expand_indices(indices, n):
+    """
+    Expands a set of implicit, numpy style, basic indices to n dimensions.
+
+    Parameters
+    ----------
+    indices : tuple of slice, int, or None
+    """
+    is_not_none = [index for index in indices if index is not None]
+    n_indexed_axes = len(is_not_none)
+    if n_indexed_axes > n:
+        raise IndexError("Too many indices")
+    else:
+        if ... in indices:
+            ii = indices.index(...)
+            return indices[:ii] + (slice(None),)*(n-n_indexed_axes+1) + indices[ii+1:]
+        else:
+            exp_indices = (slice(None),)*(n-n_indexed_axes)
+            return indices + exp_indices
+
+def _index_at_count(iterable, condition, n):
+    """
+    Returns the index in iterable, where the cumulative number of times func is True reaches
+    count.
+    """
+    count = 0
+    for ii, item in enumerate(iterable):
+        if condition(item):
+            count += 1
+            if count == n:
+                return ii
+    return None
+
 class TensorField(np.ndarray):
     """
     A class representing a tensor field.
@@ -134,7 +167,7 @@ class TensorField(np.ndarray):
         The dimension of the tensor
     _field_dx : tuple of floats and/or None
         Grid spacing for each of the field axes
-    _field_label : tuple of strings
+    _field_labels : tuple of strings
         Probably would be useful to have?
     """
     def __new__(cls, field_shape, tensor_shape, dtype=float, buffer=None,
@@ -142,7 +175,8 @@ class TensorField(np.ndarray):
         obj = super(TensorField, cls).__new__(
             cls, field_shape+tensor_shape, dtype, buffer, offset, strides, order)
 
-        obj._field_dx = tuple([None if obj.shape[ii] == 1 else 1 for ii in range(len(field_shape))])
+        obj._field_dx = (1.0,) * len(field_shape)
+        obj._field_labels = (None,) * len(field_shape)
         obj._tensor_ndim = len(tensor_shape)
 
         return obj
@@ -157,7 +191,8 @@ class TensorField(np.ndarray):
 
         # Set default values for TensorField attributes. We set default values unless the obj is an
         # instance of our own class, in which case we copy the objects attributes.
-        self._field_dx = getattr(obj, 'field_dx', (1, )*obj.ndim)
+        self._field_labels = getattr(obj, 'field_labels', (None,)*obj.ndim)
+        self._field_dx = getattr(obj, 'field_dx', (1,)*obj.ndim)
         self._tensor_ndim = getattr(obj, 'tensor_ndim', 0)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -345,67 +380,117 @@ class TensorField(np.ndarray):
     # These are:
     # __get_item__,  __set_item__
     def __getitem__(self, indices):
-        # Determine which indices have been sliced, and which have been integer
-        # indexed. An integer index(s) will either remove elements from
-        # _field_dx, or reduce the dimensionality of the tensor (depends where the
-        # index is)
-        if isinstance(indices, tuple):
-            # Here we probably have a basic index. If we don't, let np.ndarray's
-            # __getitem__ deal with it
-            res = super(TensorField, self).__getitem__(indices)
-            if not isinstance(res, TensorField):
-                return res
+        has_strs = [index for index in indices if isinstance(index, str)]
+        has_valid_slice = [index for index in indices if isinstance(index, (slice, int)) 
+                                                         or index is None or index is ...]
+        has_advanced_index = [index for index in indices if isinstance(index, (list, np.ndarray))]
+        import ipdb; ipdb.set_trace()
+        if len(has_valid_slice) == len(indices):
+            ## Numpy Style Basic Indexing
+            # There's an edge case with multiple new axes inserted between the field and tensor 
+            # dimensions, since it's not clear which ones go to the tensor and which ones to the 
+            # field. As a result, just assume they all go to the tensor
+            # Calculate a split, ii, to split the indices into field and tensor portions
+            indices = _expand_indices(indices, self.ndim)
+            ii = _index_at_count(indices, lambda ind: ind is not None, self.field_ndim)
 
-            # Expand the indices with any ellipsis so that we have one entry for each index
-            # The final length of the expanded indices depends on the number of np.newaxis (None)
-            # objects in indices
-            expanded_indices = None
-            if Ellipsis in indices:
-                ii = indices.index(Ellipsis)
-                expanded_indices = indices[:ii] + \
-                                   (Ellipsis, )*(self.ndim-len(indices)+1) \
-                                   + indices[ii+1:]
-            else:
-                expanded_indices = indices + (slice(None), )*(self.ndim-len(indices))
-            assert len(expanded_indices) == self.ndim
-
-            # Part of expanded_indices index the field axes, while the remaining portion index the
-            # tensor axes. Determine the index, ii, at which to split expanded_indices
-            ii = 0
-            count_field_index = 0
-            while count_field_index < self.ndim-self.tensor_ndim:
-                if expanded_indices[ii] is not None:
-                    count_field_index += 1
-                ii += 1
-            field_indices = expanded_indices[:ii]
-            tensor_indices = expanded_indices[ii:]
-
-            dx = list()
-            ii = 0
-            for index in field_indices:
-                if index is None:
-                    dx.append(None)
-                elif isinstance(index, int):
-                    ii = ii+1
-                else:
-                    dx.append(self.field_dx[ii])
-                    ii = ii+1
-            #assert ii == self.field_ndim
-
-            # Set attributes according to the indices
-            res._field_dx = tuple(dx)
-
-            is_none = [index for index in tensor_indices if index is None]
-            is_int = [index for index in tensor_indices if isinstance(index, int)]
-            res._tensor_ndim = self.tensor_ndim + len(is_none) - len(is_int)
-
-            return res
-        else:
-            # Here we probably have an advanced index. If we don't, let ndarray's __getitem__ throw
-            # an error
-            # It's difficult to tell what kind of shape you'll get with advanced indexing, so always
+            field_indices = indices[:ii+1]
+            tensor_indices = indices[ii+1:]
+            return self.__getitem_tf(field_indices, tensor_indices)       
+        elif has_advanced_index:
+            ## Numpy Style Advanced Indexing
+            # Here we probably have an advanced index.
+            # I don't what kind of shape you'll get with advanced indexing, so always
             # return as an ndarray.
             return super(TensorField, self).__getitem__(indices).view(np.ndarray)
+        elif has_strs:
+            ## Labelled indexing
+            # Deal with field portion of index
+            has_labels = [index for index in indices if index in self.field_labels]
+            has_field = [index for index in indices if index == 'field']
+            has_tensor = [index for index in indices if index == 'tensor']
+
+            if not isinstance(indices[0], str):
+                raise IndexError("Invalid index")
+            if len(has_field) > 1:
+                raise IndexError("Invalid index")
+            if len(has_tensor) > 1:
+                raise IndexError("Invalid index")
+            if has_field and has_labels:
+                raise IndexError("Invalid index")
+
+            current_key = str(indices[0])
+            label_to_ind = {current_key: [1]}
+            for ii in range(1, len(indices)):
+                index = indices[ii]
+                if isinstance(index, str):
+                    label_to_ind[current_key].append(ii)
+                    label_to_ind[index] = [ii+1]
+                    current_key = index
+            label_to_ind[current_key].append(len(indices))
+
+            # Deal with tensor portion of index
+            indices_tensor = None
+            if 'tensor' in label_to_ind:
+                ii, jj = label_to_ind.pop('tensor')
+                indices_tensor = indices[ii:jj]
+            else:
+                indices_tensor = (...,)
+
+            # Deal with field portion of index
+            indices_field = None
+            if 'field' in label_to_ind:
+                ii, jj = label_to_ind.pop('field')
+                indices_field = indices[ii:jj]
+            else:
+                indices = [slice(None)] * self.field_ndim
+                for label in label_to_ind:
+                    ii, jj = label_to_ind.pop(label)
+                    indices_field[ii] = indices[ii:jj]
+
+            if label_to_ind:
+                raise IndexError('Field labels were not found.')
+           
+            return self.__getitem_tf(tuple(indices_field), indices_tensor)
+        elif isinstance(indices, dict):
+            ## Xarray Style Labelled Indexing
+            # Dictionary style indexing like that from xarray!
+            # Generate a full slice object, then replace it with indices in the dict style indices
+            raise NotImplementedError("Didn't make this yet")
+        else:
+            raise ValueError("Unknown index style.")
+
+    def __getitem_tf(self, field_indices, tensor_indices):
+        """Returns a sliced field based on seperate indices for the field and tensor."""
+
+        field_indices = _expand_indices(field_indices, self.field_ndim)
+        tensor_indices = _expand_indices(tensor_indices, self.tensor_ndim)
+
+        # Compute updated field attributes
+        ii = 0
+        field_dx = list()
+        field_labels = list()
+        for index in field_indices:
+            if index is None:
+                field_dx.append(None)
+                field_labels.append(None)
+            elif isinstance(index, int):
+                ii += 1
+            else:
+                field_dx.append(self.field_dx[ii])
+                field_labels.append(self.field_labels[ii])
+                ii += 1
+
+        # Compute updated tensor attributes
+        is_none = [index for index in tensor_indices if index is None]
+        is_int = [index for index in tensor_indices if isinstance(index, int)]
+        tensor_ndim = self.tensor_ndim + len(is_none) - len(is_int)
+
+        res = super(TensorField, self).__getitem__(field_indices+tensor_indices)
+        res._tensor_ndim = tensor_ndim
+        res._field_labels = tuple(field_labels)
+        res._field_dx = tuple(field_dx)
+        return res
 
     def __setitem__(self, indices, value):
         ## Explicitly perform the data setting using a view of TensorField as
@@ -464,6 +549,13 @@ class TensorField(np.ndarray):
 
     ## Properties
     @property
+    def field_labels(self):
+        """
+        Returns the field grid spacing data.
+        """
+        return self._field_labels
+
+    @property
     def field_dx(self):
         """
         Returns the field grid spacing data.
@@ -498,8 +590,8 @@ class TensorField(np.ndarray):
         """
         return self._tensor_ndim
 
-    # The following are convenience properties for the common use case of 3 dimensional velocity
-    # fields
+    # The following are convenience properties for the common use case of a 3 dimensional vector
+    # field
     @property
     def u(self):
         """
